@@ -1,13 +1,12 @@
 {
-  "goal": "a0: public pooled free-lane OpenAI-compatible gateway (Go) + React/Supabase dashboard",
-  "status": "M1 COMPLETE — all 10 tasks done, review fixes applied, m1-core branch + tag pushed (bd52ad6)",
-  "last_actions": [
-    "finished server test file (do() helper, io import), implemented server.go + main.go + e2e (6/6 pass)",
-    "task 9: lane json tags, example 'parameters'->'params', dotenv parseEnvFile (never clobbers environ), A0_MODE gate + HasKey, env truthiness",
-    "task 10 live smoke: real wing up (3 lanes), healthz/models/400-on-unknown/real-xkiro-chat/SSE all pass; tagged m1-core",
-    "fresh-context review: VERDICT FIX FIRST -> fixed #1 committed-stream corruption, #2 1MB body cap + 413, #3 nil chain entries -> builtin, #4 per-key Available, #5 resp close on Do err, #11 UseNumber rename, #12 clock race (nowish now always called under mu), #15 envTruthy",
-    "deferred to backlog: inbound ctx cancel, /v1/models probe caching, probe pool keys, Retry-After date-form/max, disabled/Until prod wiring, dotenv quoted-comment handling, -race on CI (unsupported on android/arm64)"
-  ],
-  "next": "partner review of m1-core; then M2 (Supabase wiring, virtual keys, quota) or merge m1-core -> main; deferred review items as first M2 backlog entries",
-  "blocked": " - race detector unsupported on android/arm64; gray (Termux)"
+ "goal": "a0: public pooled free-lane OpenAI-compatible gateway (Go) + React/Supabase dashboard",
+ "status": "M1 merged to main; M2 dashboard built + pushed (080f06d,b66eb2c); waiting on Supabase project env to wire control plane",
+ "last_actions": [
+  "design-system transplant from cloudbliss (squidcloud)",
+  "a0 pages: landing auth overview keys usage models nodes",
+  "vite plugin react (android-safe) marked on config",
+  "0001_control_plane.sql w/ RLS ready"
+ ],
+ "next": "user supplies VITE_SUPABASE_URL/ANON + applies 0001 (supabase MCP has no org) \u2192 then M4 node registry + gateway auth cache",
+ "blocked": "no Supabase project reachable via MCP (0 orgs). Spending needs user."
 }

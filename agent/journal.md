@@ -13,3 +13,14 @@
 - Debug lesson: httptest hijack-fake-die test — must Hijack FIRST and raw-write; a pre-hijack WriteHeader frames raw bytes inside the managed response ("invalid byte in chunk length").
 - Hydra terminals: tag name == branch name m1-core → ambiguous refname; pushed refs/heads and refs/tags explicitly; remote tag points at bd52ad6.
 - Ledger note: -race impossible here (android/arm64); pinned as CI-only check. progress.md carries the full deferred list for M2 backlog.
+
+## 2026-10-18 (M2 start — dashboard on squidcloud design system)
+- M1 merged to main (7b0bef5), tag m1-core stays for the review-fix point.
+- User directive: skip docs, copy ~/cloudbliss-storage-fresh-main UI shell (squidcloud/Lovable stack: Vite+React18+Tailwind3+shadcn+supabase+react-query+recharts+framer-motion), strip pages/business, build a0 frontend on top. a0 is a squidcloud product.
+- Transplant: copied whole src + configs → deleted all pages/, domain components (kept ui/ 66 comps + motion + ErrorBoundary/Loader/ThemeToggle), contexts (kept ThemeContext only), hooks (kept 5 generic), libs (utils/motion/icon-map).
+- Rewrote: main.tsx, App.tsx (router: / /auth /dashboard{,keys,usage,models,nodes} auth-gated via ProtectedLayout), AuthContext (supabase auth, env-gated), integrations/supabase client+types (handwritten a0 schema, no codegen).
+- a0 pages: landing (hero/endpoint/categories), auth (signin/signup), overview (stats+snippet), keys (mint/revoke, secret shown once, hashing), usage (recharts demo series), models (category chains), nodes (mint NODE_ID+CONTROL_TOKEN env, M4 wiring pending). Footer: "a0 — a squidcloud product".
+- Portability traps on android/aarch64: @swc/core has no native binding → swapped to @vitejs/plugin-react (babel); plugin-react v5 needs vite>=6 → pinned 4.7.0. tsc --noEmit clean immediately; production build green (bundle 1GB → gzip 315KB).
+- Committed 080f06d + b66eb2c (migrations + env), pushed main. dist/node_modules gitignored.
+- Supabase MCP still shows 0 orgs / 0 projects → cannot create or wire a project from here; migration wait: 0001_control_plane.sql (virtual_keys w/ sha256+prefix+RLS, usage_events tenant-scoped reads, lane_health public-read, nodes registry). Once user supplies VITE_SUPABASE_URL/ANON (Vercel env or .env.local) the panel goes live against "a00" or new project.
+- Dev server verified: http://localhost:8080 200.
