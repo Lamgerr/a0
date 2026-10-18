@@ -43,6 +43,11 @@ type Lane struct {
 	clock    Clock
 }
 
+// HasKey reports whether the lane carries any credential (single key or pool).
+func (l *Lane) HasKey() bool {
+	return l.Key != "" || len(l.Keys) > 0
+}
+
 // builtin chain when no models.json exists: xkiro -> llm7 (keyless) -> openrouter.
 // API keys come from the environment at load time; nothing is hardcoded.
 func builtin() []*Lane {
