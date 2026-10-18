@@ -22,11 +22,11 @@ type Model struct {
 }
 
 type rawModel struct {
-	ID             string `json:"id"`
-	OwnedBy        string `json:"owned_by"`
-	ContextLength  int    `json:"context_length"`
-	AccessTier     string `json:"access_tier"`
-	Capabilities   struct {
+	ID            string `json:"id"`
+	OwnedBy       string `json:"owned_by"`
+	ContextLength int    `json:"context_length"`
+	AccessTier    string `json:"access_tier"`
+	Capabilities  struct {
 		Vision    bool `json:"vision"`
 		Tools     bool `json:"tools"`
 		Reasoning bool `json:"reasoning"`
