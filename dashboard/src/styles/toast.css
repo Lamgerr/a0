@@ -1,0 +1,437 @@
+/* ═══════════════════════════════════════════════════════════════
+   GLOBAL TOAST — "Aurora Glass" design system
+   Theme-aware frosted glass for the Radix toast (src/components/ui/toast.tsx).
+
+   Layers (bottom → top):
+   1. background-color + background-image  → the glass body (blur + sheen)
+   2. content                               → icon chip, title, description, action
+   3. ::after                               → specular top-edge highlight (1px)
+
+   The semantic accent lives in the icon chip tint, the auto-dismiss
+   progress line, focus rings, and (dark mode) the ambient bloom in the
+   shadow — never a colored side stripe.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Tokens: light theme ─────────────────────────────────────── */
+.sq-toast {
+  --sq-toast-gap: 0.75rem;
+  --sq-toast-radius: 18px;
+  --sq-toast-duration: 5000ms;
+
+  /* Surface */
+  --sq-toast-bg: hsl(0 0% 100% / 0.82);
+  --sq-toast-sheen: linear-gradient(
+    135deg,
+    hsl(0 0% 100% / 0.85) 0%,
+    hsl(0 0% 100% / 0.28) 38%,
+    transparent 62%
+  );
+  --sq-toast-border: hsl(0 0% 100% / 0.65);
+  --sq-toast-ring: hsl(0 0% 100% / 0.55);
+  --sq-toast-shadow:
+    0 1px 2px hsl(222 47% 11% / 0.05),
+    0 10px 28px -10px hsl(222 47% 11% / 0.14),
+    0 28px 56px -20px hsl(222 47% 11% / 0.18);
+  --sq-toast-shadow-hover:
+    0 1px 2px hsl(222 47% 11% / 0.06),
+    0 14px 32px -10px hsl(222 47% 11% / 0.18),
+    0 36px 64px -20px hsl(222 47% 11% / 0.22);
+
+  /* Text */
+  --sq-toast-title: hsl(0 0% 8%);
+  --sq-toast-desc: hsl(0 0% 33%);
+  --sq-toast-close-fg: hsl(0 0% 42%);
+  --sq-toast-close-fg-hover: hsl(0 0% 9%);
+  --sq-toast-close-bg: hsl(0 0% 0% / 0.04);
+  --sq-toast-close-bg-hover: hsl(0 0% 0% / 0.08);
+
+  /* Controls */
+  --sq-toast-action-bg: hsl(0 0% 0% / 0.045);
+  --sq-toast-action-border: hsl(0 0% 0% / 0.06);
+  --sq-toast-action-bg-hover: hsl(0 0% 0% / 0.08);
+  --sq-toast-action-border-hover: hsl(0 0% 0% / 0.12);
+  --sq-toast-action-active: hsl(0 0% 0% / 0.12);
+
+  /* Variant accent (semantic status) */
+  --sq-toast-accent: hsl(217 91% 52%);
+
+  transform-origin: top center;
+}
+
+/* ── Tokens: dark theme ──────────────────────────────────────── */
+.dark .sq-toast {
+  --sq-toast-bg: hsl(0 0% 8% / 0.82);
+  --sq-toast-sheen: linear-gradient(
+    135deg,
+    hsl(0 0% 100% / 0.14) 0%,
+    hsl(0 0% 100% / 0.04) 40%,
+    transparent 64%
+  );
+  --sq-toast-border: hsl(0 0% 100% / 0.1);
+  --sq-toast-ring: hsl(0 0% 100% / 0.06);
+  --sq-toast-shadow:
+    0 2px 8px hsl(0 0% 0% / 0.45),
+    0 16px 40px -12px hsl(0 0% 0% / 0.65),
+    0 40px 80px -24px hsl(0 0% 0% / 0.55);
+  --sq-toast-shadow-hover:
+    0 2px 8px hsl(0 0% 0% / 0.5),
+    0 20px 48px -12px hsl(0 0% 0% / 0.7),
+    0 48px 96px -24px hsl(0 0% 0% / 0.6);
+
+  --sq-toast-title: hsl(0 0% 96%);
+  --sq-toast-desc: hsl(0 0% 76%);
+  --sq-toast-close-fg: hsl(0 0% 66%);
+  --sq-toast-close-fg-hover: hsl(0 0% 96%);
+  --sq-toast-close-bg: hsl(0 0% 100% / 0.06);
+  --sq-toast-close-bg-hover: hsl(0 0% 100% / 0.13);
+
+  --sq-toast-action-bg: hsl(0 0% 100% / 0.07);
+  --sq-toast-action-border: hsl(0 0% 100% / 0.1);
+  --sq-toast-action-bg-hover: hsl(0 0% 100% / 0.14);
+  --sq-toast-action-border-hover: hsl(0 0% 100% / 0.18);
+  --sq-toast-action-active: hsl(0 0% 100% / 0.18);
+
+  --sq-toast-accent: hsl(80 85% 62%);
+
+  transform-origin: top right;
+}
+
+/* ── Variants: semantic accent by intent ─────────────────────── */
+.sq-toast--destructive { --sq-toast-accent: hsl(0 80% 54%); }
+.sq-toast--success { --sq-toast-accent: hsl(150 72% 33%); }
+.sq-toast--warning { --sq-toast-accent: hsl(32 95% 36%); }
+.sq-toast--info { --sq-toast-accent: hsl(217 91% 52%); }
+.dark .sq-toast--destructive { --sq-toast-accent: hsl(0 80% 62%); }
+.dark .sq-toast--success { --sq-toast-accent: hsl(150 65% 52%); }
+.dark .sq-toast--warning { --sq-toast-accent: hsl(38 95% 56%); }
+.dark .sq-toast--info { --sq-toast-accent: hsl(212 95% 62%); }
+
+/* ── Glass body ──────────────────────────────────────────────── */
+.sq-toast {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--sq-toast-radius);
+  background-color: var(--sq-toast-bg);
+  background-image: var(--sq-toast-sheen);
+  border: 1px solid var(--sq-toast-border);
+  box-shadow: var(--sq-toast-shadow);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  backdrop-filter: blur(28px) saturate(1.8);
+  transition:
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Hover: the glass deepens — content stays put (no transform race
+   with the open/swipe animations). */
+.sq-toast:hover {
+  box-shadow: var(--sq-toast-shadow-hover);
+  border-color: var(--sq-toast-ring);
+}
+
+/* Soft accent bloom in dark mode (progressive enhancement) — the accent
+   lives in the icon chip, progress line, and this glow, not a side stripe. */
+@supports (color: color-mix(in srgb, red, blue)) {
+  .dark .sq-toast {
+    box-shadow:
+      0 2px 8px hsl(0 0% 0% / 0.45),
+      0 16px 40px -12px hsl(0 0% 0% / 0.65),
+      0 24px 72px -28px color-mix(in srgb, var(--sq-toast-accent) 22%, transparent);
+  }
+  .dark .sq-toast:hover {
+    box-shadow:
+      0 2px 8px hsl(0 0% 0% / 0.5),
+      0 20px 48px -12px hsl(0 0% 0% / 0.7),
+      0 32px 88px -28px color-mix(in srgb, var(--sq-toast-accent) 34%, transparent);
+  }
+}
+
+/* ── Specular top-edge highlight ─────────────────────────────── */
+.sq-toast::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: var(--sq-toast-radius) var(--sq-toast-radius) 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--sq-toast-ring) 30%,
+    hsl(0 0% 100% / 0.75) 50%,
+    var(--sq-toast-ring) 70%,
+    transparent
+  );
+  opacity: 0.7;
+  pointer-events: none;
+}
+.dark .sq-toast::after { opacity: 0.5; }
+
+/* ── Icon chip ───────────────────────────────────────────────── */
+.sq-toast-chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  height: 1.875rem;
+  width: 1.875rem;
+  margin-top: 0.0625rem;
+  border-radius: 0.625rem;
+  border: 1px solid hsl(0 0% 50% / 0.12);
+  background: hsl(0 0% 50% / 0.1);
+  color: var(--sq-toast-accent);
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    color 0.35s ease;
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .sq-toast-chip {
+    background: color-mix(in srgb, var(--sq-toast-accent) 13%, transparent);
+    border-color: color-mix(in srgb, var(--sq-toast-accent) 24%, transparent);
+  }
+}
+.sq-toast-chip svg {
+  height: 1rem;
+  width: 1rem;
+  display: block;
+}
+
+/* ── Typography ──────────────────────────────────────────────── */
+.sq-toast-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.011em;
+  color: var(--sq-toast-title);
+}
+.sq-toast-desc {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--sq-toast-desc);
+}
+.sq-toast-body {
+  display: grid;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+/* ── Action button ───────────────────────────────────────────── */
+.sq-toast-action {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex;
+  flex: none;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--sq-toast-action-border);
+  background: var(--sq-toast-action-bg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  color: var(--sq-toast-title);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.12s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease;
+}
+.sq-toast-action:hover {
+  background: var(--sq-toast-action-bg-hover);
+  border-color: var(--sq-toast-action-border-hover);
+}
+.sq-toast-action:active {
+  transform: scale(0.97);
+}
+.sq-toast-action:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--sq-toast-bg),
+    0 0 0 4px var(--sq-toast-accent);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .sq-toast-action:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--sq-toast-bg),
+      0 0 0 4px color-mix(in srgb, var(--sq-toast-accent) 55%, transparent);
+  }
+}
+
+/* ── Close button ────────────────────────────────────────────── */
+.sq-toast-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: grid;
+  place-items: center;
+  height: 1.75rem;
+  width: 1.75rem;
+  border-radius: 0.625rem;
+  border: 0;
+  background: transparent;
+  color: var(--sq-toast-close-fg);
+  opacity: 0.8;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sq-toast-close:hover {
+  background: var(--sq-toast-close-bg-hover);
+  color: var(--sq-toast-close-fg-hover);
+  opacity: 1;
+}
+.sq-toast-close:active {
+  transform: scale(0.92);
+  background: var(--sq-toast-close-bg);
+}
+.sq-toast-close:focus-visible {
+  outline: none;
+  opacity: 1;
+  color: var(--sq-toast-close-fg-hover);
+  box-shadow:
+    0 0 0 2px var(--sq-toast-bg),
+    0 0 0 4px var(--sq-toast-accent);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .sq-toast-close:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--sq-toast-bg),
+      0 0 0 4px color-mix(in srgb, var(--sq-toast-accent) 55%, transparent);
+  }
+}
+.sq-toast-close svg {
+  height: 0.875rem;
+  width: 0.875rem;
+  display: block;
+}
+
+/* ── Auto-dismiss progress ───────────────────────────────────── */
+.sq-toast-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  transform-origin: left center;
+  background: var(--sq-toast-accent);
+  animation: sq-toast-timer var(--sq-toast-duration) linear forwards;
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .sq-toast-progress {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--sq-toast-accent) 45%, transparent),
+      var(--sq-toast-accent)
+    );
+  }
+}
+.sq-toast-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--sq-toast-accent);
+  filter: blur(4px);
+  opacity: 0.5;
+}
+
+/* ── Swipe choreography (Radix data-attrs) ───────────────────── */
+.sq-toast[data-swipe="move"] {
+  transform: translateX(var(--radix-toast-swipe-move-x));
+  transition: none;
+}
+.sq-toast[data-swipe="cancel"] {
+  transform: translateX(0);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sq-toast[data-swipe="end"]:not([data-state="closed"]) {
+  animation: sq-toast-swipe-out 0.26s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ── Enter / exit choreography ───────────────────────────────── */
+@keyframes sq-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.94);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes sq-toast-out {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+    max-height: var(--sq-toast-h, 260px);
+  }
+  45% {
+    opacity: 0;
+    transform: translateX(112%) scale(0.94);
+    filter: blur(8px);
+    max-height: var(--sq-toast-h, 260px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(112%) scale(0.94);
+    filter: blur(8px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: calc(-1 * var(--sq-toast-gap));
+  }
+}
+@keyframes sq-toast-swipe-out {
+  to {
+    transform: translateX(var(--radix-toast-swipe-end-x, 120%));
+    opacity: 0;
+  }
+}
+@keyframes sq-toast-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+.sq-toast[data-state="open"] {
+  animation: sq-toast-in 0.46s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sq-toast[data-state="closed"] {
+  pointer-events: none;
+  animation: sq-toast-out 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ── Reduced motion: content still arrives & leaves, calmly ──── */
+@media (prefers-reduced-motion: reduce) {
+  .sq-toast[data-state="open"],
+  .sq-toast[data-state="closed"],
+  .sq-toast[data-swipe="end"] {
+    animation: sq-toast-fade 0.14s ease both;
+  }
+  .sq-toast[data-state="closed"] {
+    animation-name: sq-toast-fade-out;
+  }
+  .sq-toast[data-swipe="move"],
+  .sq-toast[data-swipe="cancel"] {
+    transform: none;
+    transition: none;
+  }
+  .sq-toast-progress {
+    display: none;
+  }
+}
+@keyframes sq-toast-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sq-toast-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

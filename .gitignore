@@ -1,2 +1,7 @@
 .env
 models.json
+
+# dashboard build artifacts
+dashboard/dist/
+dashboard/node_modules/
+dashboard/.vercel/

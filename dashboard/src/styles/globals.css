@@ -1,0 +1,179 @@
+/* =====================================================
+   globals.css — SquidCloud
+   Retained: text editor styles, dialog shadows, unique animations
+   Removed: shadow definitions (now in premium-spacing.css),
+   dark theme overrides (now in index.css)
+   ===================================================== */
+
+/* Apple-style color transitions only */
+* {
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Enhanced Text Editor Optimizations */
+.enhanced-text-editor textarea {
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "liga" 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.enhanced-text-editor .syntax-highlighting-layer {
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  contain: layout style paint;
+}
+
+.enhanced-text-editor[data-file-type="text"] textarea,
+.enhanced-text-editor[data-file-type="markdown"] textarea {
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.01em;
+}
+
+.enhanced-text-editor[data-file-type="code"] textarea {
+  text-rendering: optimizeSpeed;
+  font-variant-ligatures: none;
+  letter-spacing: -0.01em;
+}
+
+.enhanced-text-editor textarea,
+.enhanced-text-editor .syntax-highlighting-layer {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 768px) {
+  .enhanced-text-editor textarea {
+    font-size: 16px !important;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.enhanced-text-editor textarea::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+.enhanced-text-editor[data-theme="dark"] textarea::selection {
+  background-color: rgba(59, 130, 246, 0.5);
+}
+
+.enhanced-text-editor textarea {
+  caret-color: #3b82f6;
+}
+
+.enhanced-text-editor[data-theme="dark"] textarea {
+  caret-color: #60a5fa;
+}
+
+.enhanced-text-editor .line-numbers {
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+/* ── Universal mobile bottom sheet (vaul) ─────────────── */
+/* Let vaul own the transform/opacity transitions so the global
+   `* { transition: transform }` rule never makes drag feel laggy. */
+.vaul-sheet-content,
+.vaul-sheet-overlay {
+  transition-property: none;
+}
+
+/* ── Dialog / Modal shadows ───────────────────────────── */
+[role="dialog"],
+[role="alertdialog"] {
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 10px 20px -5px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Smooth transitions for interactive elements ─────── */
+* {
+  transition-property: background-color, border-color, color, fill, stroke,
+    opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Spring-like transform transitions for interactive elements */
+button, a, [role="button"], summary, [tabindex]:not([tabindex="-1"]) {
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition-duration: 200ms;
+}
+
+/* Bulk Actions Toolbar Animations */
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 3s ease infinite;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.8; }
+}
+
+/* Glassmorphism */
+.glass-effect {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+}
+
+@keyframes shine {
+  0%   { left: -100%; }
+  100% { left: 200%; }
+}
+
+/* Focus states */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid hsl(221, 83%, 53%);
+  outline-offset: 2px;
+}
+
+.transform-gpu {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+@media (min-width: 1024px) {
+  html {
+    zoom: 1.2;
+  }
+}
+
+@media (max-width: 1023px) {
+  html {
+    zoom: 1;
+    width: 100%;
+  }
+
+  body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  html {
+    zoom: 1.05;
+  }
+}
