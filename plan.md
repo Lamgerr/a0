@@ -41,7 +41,7 @@
 **Interfaces:**
 - Produces:
   - `type Lane struct { Name, URL, Key, Model string; Keys []string; Vision bool; VisionModel string; StreamOnly bool; Params map[string]any; Headers map[string]string; Public *bool; disabled bool }`
-  - `func Load(path string) ([]Lane, error)` — file or builtin if missing/malformed
+  - `func Load(path string) ([]*Lane, error)` — file or builtin if missing/malformed
   - `type HTTPClient interface { Do(*http.Request) (*http.Response, error) }` (mockable everywhere)
 
 - [ ] **Step 1: Write the failing test** — fixture JSON (dex schema + junk fields `foo: 1`, `keys: ["a","b"]`) asserts: fields land, junk ignored, `disabled` false; missing file returns builtin chain (xkiro → llm7(keyless) → openrouter).
@@ -74,7 +74,7 @@
 **Interfaces:**
 - Produces:
   - `type Model struct { ID, Lane, Owner string; Ctx int; Vision, Tools, Reasoning bool; Tier string }`
-  - `func Probe(c HTTPClient, lanes []Lane) []Model` — GET `<URL>/models` per lane (`Authorization: Bearer <key>` present only when set), normalizes OpenAI model-list `{data:[{id,owned_by,...}]}`, 500ms-limited race per lane, missing/bad lanes skipped.
+  - `func Probe(c HTTPClient, lanes []*Lane) []Model` — GET `<URL>/models` per lane (`Authorization: Bearer <key>` present only when set), normalizes OpenAI model-list `{data:[{id,owned_by,...}]}`, 500ms-limited race per lane, missing/bad lanes skipped.
   - `func (m Model) JSON()` name/shape as `/v1/models` merged object.
 
 - [ ] **Step 1: Failing test** — two fake lanes (one with key → assert no auth header on keyless one), ids merged and prefixed by lane field; dead lane ignored.
@@ -93,7 +93,7 @@
 - Consumes: `lane.Load` output.
 - Produces:
   - `var Categories = map[string][]string` — id → lane-chain, pinned to concept.md table: flagship `[xkiro@qwen/qwen3.8-max:free, llm7@glm-5.3, openrouter@openrouter/free]`, reasoning `[xkiro@qwen/qwen3.7-max:free, openrouter@nemotron-3-ultra-550b-a55b:free, xkiro@cohere/command-a-reasoning]`, coder `[xkiro@qwen/qwen3-coder-plus:free, llm7@deepseek-v4-pro, groq@qwen/qwen3.8-27b, openrouter@cohere/north-mini-code:free]`, vision `[gemini-direct@gemini-3.8-flash, xkiro@qwen/qwen3.7-plus:free, openrouter@nvidia/nemotron-3.5-super-vl:free]`, fast `[groq@gpt-oss-120b, xkiro@qwen/qwen3.7-flash:free, llm7@GLM-5.3-Flash]`, omni `[openrouter@thinkingmachines/inkling:free]`, long `[xkiro@qwen/qwen3.8-max:free, llm7@glm-5.3]`.
-  - `func Resolve(cat string, lanes []Lane) ([]ResolvedLane, error)` — `type ResolvedLane{ L Lane; Model string }`, lanes missing from the config pruned (admins can shrink, not grow); unknown → `ErrUnknown` (message lists all valid ids).
+  - `func Resolve(cat string, lanes []*Lane) ([]*Lane, error)` — `type ResolvedLane{ L Lane; Model string }`, lanes missing from the config pruned (admins can shrink, not grow); unknown → `ErrUnknown` (message lists all valid ids).
   - `var IDs []string` (display list for /v1/models + 400 body).
 
 - [ ] **Step 1: Failing test** — `Resolve("a0/coder", cfg)` → first element is xkiro + `qwen/qwen3-coder-plus` and skips absent lanes; `Resolve("gpt-4o", _)` errors with all seven names in message.
