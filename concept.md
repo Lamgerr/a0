@@ -1,6 +1,6 @@
 # a0 — Concept
 
-One OpenAI-compatible gateway that pools the usable free LLM lanes of 2026 behind a single endpoint and a dashboard. Written 2026-10-18.
+One OpenAI-compatible gateway that pools the usable free LLM lanes of 2026 behind a single endpoint and a dashboard. **Public multi-tenant service.** Written 2026-10-18, revised for public scope same day.
 
 ## Why
 
@@ -46,38 +46,50 @@ Raw `vendor/model` passthrough always available. Excluded: poolside laguna (dies
 
 ## Architecture
 
-Python 3, FastAPI + httpx, asyncio single process (Termux-friendly), sqlite ledger.
+**Gateway: Go** (net/http + gorilla-less stdlib or chi router), single static binary. Public scope makes concurrency real (many long-lived SSE streams), and Go gives one deployable artifact with near-zero memory per connection. Lane adapters stay data-driven; the core is a thin state machine over catalogs. The dashboard is the only TS in the repo.
 
 ```
 a0/
-├── gateway/
-│   ├── adapters/        # one module per lane; normalizes to one internal request/response shape
-│   ├── catalog.py       # probe lane /v1/models, normalize {lane, model, ctx, caps, tier}, cache 1h
-│   ├── router.py        # alias resolution + failover chain builder (order: capability match, ctx desc, headroom)
-│   ├── keys.py          # key pools per lane, cooldown state
-│   ├── ledger.py        # sqlite usage/quota, nightly rollover
-│   └── server.py        # FastAPI: /v1/*, /healthz, /admin/*
+├── gateway/             # Go: adapters/, catalog.go, router/ (alias+failover), keyring.go, ledger.go, server.go
 ├── dashboard/           # Vite + React TSX + Tailwind + shadcn/ui (deploys to Vercel)
 ├── models.json          # runtime lane config, gitignored
 ├── models.example.json  # schema doc
-├── tests/               # pytest; fake-lane e2e (no external nets in CI)
+├── tests/               # go test + fake-lane e2e (no external nets in CI)
 └── concept.md
 ```
 
-Lane config reuses the dex `models.json` schema exactly (`name/url/key/model/vision/vision_model/stream_only/params/headers`) — dex's existing chain migrates unchanged, and dex's first lane can simply become `http://127.0.0.1:8082/v1` to inherit the whole pool.
+Lane config reuses the dex `models.json` core schema (`name/url/key/model/vision/...`) plus a0 extensions (`keys: []` pools, `public:` flag, `quota:` constants) — dex's loader whitelists known fields and ignores a0's extras (verified).
 
-Lane set: xkiro (primary, 49 free), llm7 (keyless), openrouter, groq, gemini-direct, kilo (keyless), NVIDIA NIM, gonka. Keyless lanes mean a0 answers even with zero keys.
+Lane set: xkiro (primary, 49 free), llm7 (keyless, local-only), openrouter, groq, gemini-direct, kilo (keyless, local-only), NVIDIA NIM, gonka.
 
-## Supabase role
+## Public service model
 
-Cloud state behind the dashboard: `usage_events` (ts, lane, model, virtual_key, in_tok, out_tok, status, latency), `virtual_keys` (key_hash, name, revoked, rate window), `lane_health` (lane, ts, ok, detail). Gateway writes via service-role key, batched fire-and-forget (5s/50 events) — a Supabase outage never blocks inference. Dashboard reads via anon + RLS. Local sqlite stays the runtime truth; Supabase is the history/mirror the dashboard reads.
+- **Auth: Supabase is runtime truth.** Virtual keys, users, quota all live in Supabase (Postgres + Auth); the gateway keeps an in-memory key cache with 60s TTL, so revocation lags at most a minute and the hot path never blocks on a select.
+- **Free tier per key:** ~20 RPM / 2,000 req/day default, tunable per key. Dashboard-only signup (email via Supabase Auth), no anonymous public lane by default.
+- **`public:` flag per lane.** Only lanes whose ToS tolerates fronting are served publicly; ToS-fragile lanes (llm7 "experimentation", NIM "prototyping") are owner-key-only. Keyless lanes exist only when running locally (`A0_MODE=local`).
+- **Abuse caps:** global circuit breakers per lane (pool daily token budget) so one tenant can't burn the whole free pool; hard stop → 503 with retry-after, dashboard shows pool state.
+- **Dex unchanged:** dex's lane 1 keeps pointing at a0, just with a virtual key now.
 
-Frontend deploys to Vercel, talks to Supabase directly for data, to the gateway's `/v1/*` for playground calls (from the browser only when the gateway has a public hole — optional).
+## Supabase role (-expanded for public)
+
+Cloud state IS the service state: `users` (via Supabase Auth), `virtual_keys` (key_hash, name, revoked, rpm, daily_cap), `usage_events` (ts, lane, model, virtual_key, in_tok, out_tok, status, latency), `lane_health` (lane, ts, ok, detail). Gateway writes usage batched fire-and-forget; reads keys/quota through its in-memory cache. Dashboard (Vercel) talks to Supabase directly via anon + RLS for everything except playground calls, which go to the public `/v1/*`.
+
+## Deploy
+
+Gateway = single Go binary/container on a free host (Fly.io free machine or the existing bot-hosting VPS), behind TLS via host platform. Local mode (`A0_MODE=local`) = same binary on Termux, keyless lanes on, Supabase optional.
+
+## Decisions (builder — logged, revised for public)
+
+- Go gateway; Python share with dex is dropped — integration is plain HTTP.
+- llm7's closed model ids (GPT-6/Claude/Grok) default OFF behind `A0_EXPERIMENTAL=1`, owner-only, never in public aliases.
+- Default port 8082; public bind requires a valid Supabase service key present.
+- Anthropic-dialect passthrough (`/v1/messages` via xKiro) deferred to phase 2.
+- Provider ToS review is a hard gate per lane before flipping `public: true`.
 
 ## Open questions resolved (builder round 1)
 
-- **Virtual keys — source of truth is local sqlite; Supabase is a mirror.** Request-time validation only ever touches local state; the dashboard's key CRUD lands in Supabase and the gateway converges to it on a 30s poll. Supabase outage freezes *management*, never *inference*.
-- **Dashboard at m3 reads a thin read-only layer over gateway `/admin/*`**; it gains Supabase reads (history) and key writes at m4.
+- **Virtual keys — Supabase is runtime truth** (public scope); request-time validation uses the gateway's 60s in-memory cache, so revocation lags at most a minute and never blocks inference. In local mode, an embedded fallback (sqlite copy) keeps localhost tools working when offline.
+- **Dashboard at m3 reads a thin read-only layer over gateway `/admin/*`**; Supabase-backed reads arrive with m4 when public auth ships.
 - **models.json stays dex-compatible.** dex's loader (~/dex/config.py `_load_model_pool`) whitelists known fields and silently drops unknown ones — verified — so a0 extends the *same file* with key pools (`keys: [...]`), cooldown and quota constants; dex never chokes on them.
 - **xKiro's `/v1/models` is public and probeable** (live-verified 2026-10-18: 49 free chat models with access_tier/capabilities/context) — the hourly self-heal hangs on it as designed. Other lanes' catalogs are normalized the same way.
 - **Known quota constants (rpm/rpd/tok-day):** xkiro 500K tok/day (agent-gateway free tier), llm7 500K tok/day anon (1M with free email token), openrouter 20 rpm / 50 rpd (1,000 after one-time $10), groq 30 rpm / 1K rpd / 200K tok-day, kilo ~200 req/hr per IP, NIM up to 40 rpm, gemini unpublished (per-project console). gonka/gemini constants unknown — the ledger learns them empirically at runtime.
@@ -92,8 +104,8 @@ By the builder (logged): llm7's closed models (GPT-6/Claude/Grok ids) default OF
 
 ## Milestones
 
-1. Gateway core: xkiro+llm7+openrouter adapters, chain failover, SSE streaming, models.json
-2. Catalog + aliases + sqlite ledger (+groq, gemini, kilo adapters)
-3. Dashboard: health + usage + catalog (read-only)
-4. Supabase persistence + virtual keys + dashboard key management
-5. Ops: `a0 doctor`, catalog self-heal, NIM/gonka adapters, deploy notes
+1. Gateway core (Go): xkiro+llm7+openrouter adapters, chain failover, SSE streaming, models.json, local mode
+2. Catalog + aliases + in-process usage ledger (+groq, gemini, kilo adapters)
+3. Dashboard: health + usage + catalog (read-only, via gateway `/admin` read layer)
+4. Public: Supabase Auth + virtual keys + per-key caps + `public:` lane gating + Go binary deploys
+5. Ops: `a0 doctor`, catalog self-heal, NIM/gonka adapters, abuse circuit breakers, deploy notes
