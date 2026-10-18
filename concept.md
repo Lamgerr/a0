@@ -45,9 +45,21 @@ xKiro is the spine: 49 free chat models, most at 1M ctx with vision+tools+reason
 
 Raw `vendor/model` passthrough always available. Excluded: poolside laguna (dies Oct 31), dots-3-note (Dec 31), llm7's closed models (default off, below).
 
-## Architecture
+## Architecture — three tiers, Pterodactyl-style
 
-**Gateway: Go** (net/http + gorilla-less stdlib or chi router), single static binary. Public scope makes concurrency real (many long-lived SSE streams), and Go gives one deployable artifact with near-zero memory per connection. Lane adapters stay data-driven; the core is a thin state machine over catalogs. The dashboard is the only TS in the repo.
+**Vercel (panel UI) · Supabase (panel brain) · Go gateways (wings).** The panel never proxies inference: wings do the work, the panel manages them. Multiple gateways attach over time without code changes.
+
+- **Frontend on Vercel** — Vite + React TSX + Tailwind + shadcn. Reads/writes Supabase via anon + RLS. Nothing else runs here.
+- **Supabase = central control plane** — users (Auth), virtual keys, usage history, quota state, and the **node registry**: which gateways exist, their URLs, heartbeats, lane-pool state, capacity. Panels talks to wings; wings register themselves.
+- **Go gateways ("wings")** — N instances, each a single static binary serving `/v1/*` (categories, streaming, failover, key rotation). Holds its own lane secrets in local `models.json`; validates user keys via its 60s cache from Supabase; reports usage/health batched. The dashboard is the only TS in the repo.
+
+**Node attachment flow (add a gateway without hassle):**
+1. Dashboard → "Add node" → panel mints `NODE_ID` + one-time `CONTROL_TOKEN`.
+2. Run the gateway with those env vars on any box (VPS, Fly.io, Termux).
+3. On boot it self-registers: probes lanes, POSTs catalog + capacity to Supabase, heartbeats every 30s.
+4. Live in the dashboard. Decommission = revoke node; users barely notice because nodes are interchangeable.
+
+Nodes hold no state except secrets in `models.json` — any node serves any user.
 
 ```
 a0/
@@ -77,7 +89,7 @@ Cloud state IS the service state: `users` (via Supabase Auth), `virtual_keys` (k
 
 ## Deploy
 
-Gateway = single Go binary/container on a free host (Fly.io free machine or the existing bot-hosting VPS), behind TLS via host platform. Local mode (`A0_MODE=local`) = same binary on Termux, keyless lanes on, Supabase optional.
+Wings = single Go binary/container on any free host (Fly.io free machine, existing bot-hosting VPS, Termux), TLS via host platform. Local mode (`A0_MODE=local`) = same binary on Termux; keyless lanes on; Supabase optional. The first wing IS the dev instance — more attach via the node flow above.
 
 ## Decisions (builder — logged, revised for public)
 
@@ -108,5 +120,6 @@ By the builder (logged): llm7's closed models (GPT-6/Claude/Grok ids) default OF
 1. Gateway core (Go): xkiro+llm7+openrouter adapters, chain failover, SSE streaming, models.json, local mode
 2. Catalog + aliases + in-process usage ledger (+groq, gemini, kilo adapters)
 3. Dashboard: health + usage + catalog (read-only, via gateway `/admin` read layer)
-4. Public: Supabase Auth + virtual keys + per-key caps + `public:` lane gating + Go binary deploys
-5. Ops: `a0 doctor`, catalog self-heal, NIM/gonka adapters, abuse circuit breakers, deploy notes
+4. Node protocol: Supabase control plane + node registry + registration/heartbeat/usage endpoints + key cache
+5. Public: Supabase Auth + virtual keys + per-key caps + `public:` lane gating + dashboard deploy
+6. Ops: `a0 doctor`, catalog self-heal, NIM/gonka adapters, abuse circuit breakers, deploy notes
