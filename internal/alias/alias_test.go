@@ -50,7 +50,7 @@ func TestResolvePrunesAbsentLanes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if len(chain) != 1 || chain[0].Lane != "llm7" || chain[0].Model != "glm-5.3" {
+	if len(chain) != 1 || chain[0].L.Name != "llm7" || chain[0].Model != "glm-5.3" {
 		t.Fatalf("prune failed: %+v", chain)
 	}
 }
