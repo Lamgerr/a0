@@ -30,7 +30,7 @@ func firstChainOf(t *testing.T, cat string) (string, string, int) {
 	if err != nil {
 		t.Fatalf("Resolve(%q): %v", cat, err)
 	}
-	return chain[0].Lane, chain[0].Model, len(chain)
+	return chain[0].L.Name, chain[0].Model, len(chain)
 }
 
 func TestResolveCoderLeadsWithXKiro(t *testing.T) {
