@@ -1,0 +1,40 @@
+{
+  "_comment": "a0 wing lane sheet — one OpenAI-compatible upstream (lane) per entry, tried in chain order per category until one answers. Copy to models.json (gitignored) on any wing. Schema core is dex-compatible (dex ignores a0's extra fields); a0 adds: keys (key pool, rotated with cooldown), parameters (body-merge into every request), headers (extra request headers).",
+  "chain": [
+    {
+      "name": "xkiro",
+      "url": "https://api.xkiro.com/v1",
+      "key": "sk-xt-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "model": "qwen/qwen3.8-max:free",
+      "keys": ["sk-xt-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "sk-xt-yyyyyyyyyyyyyyyyyyyyyyyyyyyy"],
+      "vision": true
+    },
+    {
+      "name": "llm7",
+      "url": "https://api.llm7.io/v1",
+      "key": "",
+      "model": "GLM-5.3-Flash",
+      "parameters": {"reasoning_effort": "low"}
+    },
+    {
+      "name": "openrouter",
+      "url": "https://openrouter.ai/api/v1",
+      "key": "sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "model": "openrouter/free",
+      "vision": true
+    },
+    {
+      "name": "groq",
+      "url": "https://api.groq.com/openai/v1",
+      "key": "gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "model": "gpt-oss-120b"
+    },
+    {
+      "name": "gemini-direct",
+      "url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "key": "AIzaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "model": "gemini-3.8-flash",
+      "vision": true
+    }
+  ]
+}
