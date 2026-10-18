@@ -5,3 +5,7 @@ models.json
 dashboard/dist/
 dashboard/node_modules/
 dashboard/.vercel/
+
+# dashboard env files keep secrets
+**/.env.local
+!**/.env.example
