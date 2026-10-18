@@ -27,7 +27,7 @@ func main() {
 	mode := env("A0_MODE", "local")
 	lanes = filterForMode(lanes, mode)
 	if len(lanes) == 0 {
-		log.Fatalf("no lanes enabled in mode=%s (set A0_EXPERIMENTAL=1 to force keyless lanes)", mode)
+		log.Fatalf("no lanes enabled in mode=%s (set A0_EXPERIMENTAL=true to force keyless lanes)", mode)
 	}
 	r := relay.New(nil, lanes)
 	srv := &http.Server{
@@ -53,6 +53,15 @@ func env(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// envTruthy accepts 1/true/t/yes (case-insensitive).
+func envTruthy(k string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(k))) {
+	case "1", "true", "t", "yes":
+		return true
+	}
+	return false
 }
 
 // parseEnvFile loads KEY=VALUE lines from a dotenv file without clobbering
@@ -92,7 +101,7 @@ func parseEnvFile(path string) {
 // default) keeps everything; "public" drops lanes with no credentials to
 // conserve anonymous-jail quotas, unless A0_EXPERIMENTAL=1 forces them in.
 func filterForMode(lanes []*lane.Lane, mode string) []*lane.Lane {
-	if mode != "public" || os.Getenv("A0_EXPERIMENTAL") == "1" {
+	if mode != "public" || envTruthy("A0_EXPERIMENTAL") {
 		return lanes
 	}
 	out := lanes[:0:0]

@@ -79,3 +79,12 @@ func TestExampleChainParsesViaLoader(t *testing.T) {
 		t.Fatalf("example chain missing xkiro/llm7: %v", names)
 	}
 }
+
+func TestExperimentalTruthy(t *testing.T) {
+	t.Setenv("A0_MODE", "public")
+	t.Setenv("A0_EXPERIMENTAL", "true")
+	lanes := []*lane.Lane{{Key: ""}}
+	if got := filterForMode(lanes, "public"); len(got) != 1 {
+		t.Fatalf("A0_EXPERIMENTAL=true must keep keyless lanes in")
+	}
+}

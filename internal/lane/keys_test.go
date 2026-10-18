@@ -71,3 +71,21 @@ func TestCoolKeyWinsOverLaneUntil(t *testing.T) {
 		t.Fatalf("Until() = %v, want max cooldown %v", l.Until(), want)
 	}
 }
+
+func TestAvailableAnyFreshKey(t *testing.T) {
+	var l = &Lane{Keys: []string{"A", "B"}}
+	frozen := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+	l = l.WithClock(func() time.Time { return frozen })
+	l.CoolKey("A", time.Minute)
+	if !l.Available() {
+		t.Fatal("one benched pool key must not take down the lane while B is fresh")
+	}
+	l.CoolKey("B", time.Minute)
+	if l.Available() {
+		t.Fatal("all keys benched -> lane unavailable")
+	}
+	l.CoolLane(2 * time.Minute)
+	if l.Available() {
+		t.Fatal("lane cooldown dominates")
+	}
+}

@@ -71,31 +71,43 @@ func newLane(l *Lane) *Lane {
 // Load reads models.json from path; a missing or malformed file yields the
 // builtin chain (never an error) so the gateway always boots. Unknown JSON
 // fields are ignored silently — dex compatibility. Accepts either a bare
-// chain array (dex-native shape) or {"chain": [...]}.
+// chain array (dex-native shape) or {"chain": [...]}. Null entries in a
+// crafted-but-decodable file also fall back to builtin (a chain of nils is
+// malformed for all practical purposes).
 func Load(path string) ([]*Lane, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return builtin(), nil
 	}
-	if lanes, err := decode(raw); err == nil && len(lanes) > 0 {
-		for _, l := range lanes {
-			newLane(l)
-		}
-		return lanes, nil
+	lanes, derr := decode(raw)
+	if derr != nil || len(lanes) == 0 {
+		return builtin(), nil
 	}
-	return builtin(), nil
+	for _, l := range lanes {
+		newLane(l)
+	}
+	return lanes, nil
 }
 
 func decode(raw []byte) ([]*Lane, error) {
+	clean := func(arr []*Lane) []*Lane {
+		out := arr[:0:0]
+		for _, l := range arr {
+			if l != nil && l.Name != "" && l.URL != "" && l.Model != "" {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
 	var arr []*Lane
-	if err := json.Unmarshal(raw, &arr); err == nil && len(arr) > 0 {
-		return arr, nil
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		return clean(arr), nil
 	}
 	var file struct {
 		Chain []*Lane `json:"chain"`
 	}
 	if err := json.Unmarshal(raw, &file); err == nil {
-		return file.Chain, nil
+		return clean(file.Chain), nil
 	}
 	return nil, os.ErrNotExist
 }

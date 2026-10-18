@@ -5,6 +5,7 @@
 package relay
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -112,6 +113,9 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 
 	resp, err := c.Do(req)
 	if err != nil {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
 		l.CoolLane(defaultCool)
 		return false
 	}
@@ -157,10 +161,11 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 			return true
 		}
 		if rerr != nil {
-			// upstream died mid-body: nothing sensible is written past the
-			// partial stream; the chain has consumed its shot.
+			// Upstream died mid-body. The 200 + partial bytes are already on
+			// the wire, so no further lane attempt or 502 append is possible:
+			// the chain considers itself done either way.
 			l.CoolLane(defaultCool)
-			return false
+			return true
 		}
 	}
 }
@@ -169,7 +174,9 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 // lane's configured body params without overwriting anything the caller set.
 func rename(body []byte, model string, params map[string]any) []byte {
 	var m map[string]any
-	if err := json.Unmarshal(body, &m); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&m); err != nil {
 		return body
 	}
 	m["model"] = model

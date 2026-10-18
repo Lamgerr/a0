@@ -39,8 +39,15 @@ func New(r *relay.Relay) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": data})
 	})
 	mux.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, req *http.Request) {
+		req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
 		var body json.RawMessage
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			var mbe *http.MaxBytesError
+			if errors.As(err, &mbe) {
+				writeJSON(w, http.StatusRequestEntityTooLarge,
+					map[string]any{"error": map[string]any{"message": "request body too large"}})
+				return
+			}
 			writeErr(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}

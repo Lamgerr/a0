@@ -131,3 +131,13 @@ func TestServerE2E(t *testing.T) {
 		}
 	})
 }
+
+func TestOversizeBodyRejected(t *testing.T) {
+	lanes := fakeLanes(t)
+	h := New(relay.New(http.DefaultClient, lanes))
+	big := `{"model":"a0/coder","messages":[` + strings.Repeat(`{"role":"user","content":"x"},`, 40_000) + `{"role":"user","content":"y"}]}`
+	w := do(h, "POST", "/v1/chat/completions", []byte(big))
+	if w.Code != 413 {
+		t.Fatalf("oversize body code = %d ( body[:80]=%q )", w.Code, w.Body.String()[:min(80, w.Body.Len())])
+	}
+}

@@ -26,13 +26,20 @@ func (l *Lane) nowish() time.Time {
 func (l *Lane) NextKey() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	now := l.nowish()
+	return l.nextKeyLocked(l.nowish())
+}
+
+// nextKeyLocked is NextKey's core; caller holds mu and supplies now.
+func (l *Lane) nextKeyLocked(now time.Time) string {
 	pool := l.Keys
 	if len(pool) == 0 {
 		pool = []string{l.Key}
 	}
 	for i := 0; i < len(pool); i++ {
 		k := pool[(l.next+uint64(i))%uint64(len(pool))]
+		if k == "" {
+			continue
+		}
 		if until, cooled := l.keyCool[k]; cooled && until.After(now) {
 			continue
 		}
@@ -57,15 +64,20 @@ func (l *Lane) CoolLane(d time.Duration) {
 	l.withLock(func() { l.laneCool = l.nowish().Add(d) })
 }
 
-// Available reports whether the lane may be attempted right now.
+// Available reports whether the lane may be attempted right now: the lane
+// itself must not be benched, and — for keyed lanes — at least one key in
+// the pool must be fresh. (One benched pool key never downgrades the lane.)
 func (l *Lane) Available() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	u := l.untilLocked()
-	if u.IsZero() {
+	now := l.nowish()
+	if l.laneCool.After(now) {
+		return false
+	}
+	if !l.HasKey() {
 		return true
 	}
-	return !l.nowish().Before(u)
+	return l.nextKeyLocked(now) != ""
 }
 
 // Until is the max lane/key cooldown deadline; zero time when nothing is cooled.

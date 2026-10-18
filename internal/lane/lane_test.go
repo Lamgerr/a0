@@ -80,3 +80,28 @@ func TestLoadMalformedFallsBackToBuiltin(t *testing.T) {
 		t.Fatalf("malformed file must return builtin chain, got %d lanes", len(lanes))
 	}
 }
+
+func TestNilChainEntriesFallBackToBuiltin(t *testing.T) {
+	for _, raw := range []string{
+		`{"chain":[null]}`,
+		`[null]`,
+		`[null,{"name":"ok","url":"https://up/v1","model":"m"}]`,
+	} {
+		f := writeFixture(t, raw)
+		lanes, err := Load(f)
+		if err != nil {
+			t.Fatalf("load(%s): %v", raw, err)
+		}
+		if len(lanes) == 0 {
+			t.Fatalf("load(%s): empty chain", raw)
+		}
+		for _, l := range lanes {
+			if l == nil {
+				t.Fatalf("load(%s): nil lane leaked", raw)
+			}
+			if l.Name == "" {
+				t.Fatalf("load(%s): unnamed lane", raw)
+			}
+		}
+	}
+}
