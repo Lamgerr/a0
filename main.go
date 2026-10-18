@@ -21,7 +21,7 @@ import (
 
 func main() {
 	parseEnvFile(".env")
-	port := env("A0_PORT", env("PORT", "8082"))
+	port := env("A0_PORT", env("SERVER_PORT", env("PORT", "8082")))
 	mode := env("A0_MODE", "local")
 	nodeID, token := env("A0_NODE_ID", ""), env("A0_CONTROL_TOKEN", "")
 	ctlURL, anonKey := env("A0_SUPABASE_URL", ""), env("A0_SUPABASE_ANON_KEY", "")
