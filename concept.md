@@ -12,7 +12,7 @@ Free inference exists, but it is scattered: every lane has different limits, key
 - `GET /v1/models` — merged live catalog: friendly aliases + all raw free models
 - Failover: 429/5xx/timeout rolls to the next lane honoring Retry-After, with a retry budget logged per attempt
 - Key pools per lane: round-robin + 429 cooldown (multiplies free-tier limits)
-- Quota ledger: tokens/req/day per lane, prefer lanes with headroom (xKiro 500K tok/day, llm7 500K anon, groq 200K tok/day …)
+- Quota ledger: tokens/req/day per lane, prefer lanes with headroom (xKiro 500K tok/day, llm7 500K anon, groq 200K tok/day …), per-key caps applied on top
 - Keyless mode: works with zero keys (kilo gateway 200 req/hr, llm7 anonymous, pollinations, ovh)
 - Self-healing catalog: probes every lane's `/v1/models` hourly, drops retired models silently, surfaces drift in dashboard
 - Dashboard: lane health, usage graphs, virtual keys, model catalog, quick playground
@@ -98,7 +98,7 @@ Gateway = single Go binary/container on a free host (Fly.io free machine or the 
 
 ## Decisions already made
 
-By the partner: OpenAI-compatible contract; Python gateway; React/TSX/Tailwind/shadcn/Supabase/Vite dashboard; xKiro key exists; free-first.
+By the partner: OpenAI-compatible contract; **Go gateway, public service**; React/TSX/Tailwind/shadcn/Supabase/Vite dashboard; xKiro key exists; free-first.
 
 By the builder (logged): llm7's closed models (GPT-6/Claude/Grok ids) default OFF behind `A0_EXPERIMENTAL=1` and never in aliases; default port 8082, loopback-only unless given a master key; master key generated on first boot; anthropic-dialect passthrough (`/v1/messages` via xKiro) deferred to phase 2.
 
