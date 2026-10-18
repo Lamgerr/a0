@@ -24,3 +24,9 @@
 - Committed 080f06d + b66eb2c (migrations + env), pushed main. dist/node_modules gitignored.
 - Supabase MCP still shows 0 orgs / 0 projects → cannot create or wire a project from here; migration wait: 0001_control_plane.sql (virtual_keys w/ sha256+prefix+RLS, usage_events tenant-scoped reads, lane_health public-read, nodes registry). Once user supplies VITE_SUPABASE_URL/ANON (Vercel env or .env.local) the panel goes live against "a00" or new project.
 - Dev server verified: http://localhost:8080 200.
+## 2026-10-18 (MCP unlocked → a00 wired)
+- MCP finally sees "NaveenSingh9999's Org" + project a00 (opcslzfwreblnrszvgii, ap-northeast-1, PG17, created today). Also inflatestore (old, untouched).
+- Applied 0001_control_plane.sql via MCP (virtual_keys/usage_events/lane_health/nodes + RLS). URL https://opcslzfwreblnrszvgii.supabase.co; publishable anon key captured.
+- Security lints: pre-existing rls_auto_enable() SECURITY DEFINER callable by anon/authenticated → revoked EXECUTE from anon+authenticated, kept postgres/service_role. Panels lint re-run for confirmation later.
+- dashboard/.env.local with VITE_SUPABASE_* → build bakes URL (ENV_BAKED_OK). .gitignore now covers **/.env.local (!.env.example). Pushed 5d1f74e6.
+- TODO: create a test user via auth signup to validate RLS policies round-trip; supabase auth email templates still default.
