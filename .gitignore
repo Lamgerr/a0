@@ -9,3 +9,7 @@ dashboard/.vercel/
 # dashboard env files keep secrets
 **/.env.local
 !**/.env.example
+
+# local-only control-plane smoke credentials + secret-bearing sql
+.smoke-node.env
+.lane_chain_secret.sql

@@ -33,10 +33,26 @@ const (
 // written to the response by Chat.
 var ErrExhausted = errors.New("all lanes cooling, retry later")
 
+// UsageEvent is one relayed attempt, for the wing's usage recorder.
+type UsageEvent struct {
+	Lane      string
+	Model     string
+	KeyID     string
+	Status    int
+	LatencyMs int
+}
+
 // Relay owns the lane chain and the http client used to reach upstreams.
+// Usage is optional: wired by the wing to its control-plane recorder.
 type Relay struct {
 	C     lane.HTTPClient
 	Lanes []*lane.Lane
+	Usage func(UsageEvent)
+}
+
+// Meta carries request-scoped attribution into Chat.
+type Meta struct {
+	KeyID string // validated virtual key id (public mode)
 }
 
 // New wires a relay over lanes; c is injectable for tests.
@@ -53,6 +69,11 @@ func New(c lane.HTTPClient, lanes []*lane.Lane) *Relay {
 // Success forwards upstream bytes verbatim; exhaustion writes the locked 502
 // body and returns ErrExhausted for the server layer to account.
 func (r *Relay) Chat(w http.ResponseWriter, body []byte) error {
+	return r.ChatMeta(w, body, Meta{})
+}
+
+// ChatMeta is Chat with request attribution (public-mode key id).
+func (r *Relay) ChatMeta(w http.ResponseWriter, body []byte, meta Meta) error {
 	var req struct {
 		Model string `json:"model"`
 	}
@@ -78,7 +99,17 @@ func (r *Relay) Chat(w http.ResponseWriter, body []byte) error {
 			continue
 		}
 		attempts++
-		ok := attempt(r.C, w, l, h.Model, body)
+		start := time.Now()
+		ok, status := attempt(r.C, w, l, h.Model, body)
+		if r.Usage != nil {
+			r.Usage(UsageEvent{
+				Lane:      l.Name,
+				Model:     h.Model,
+				KeyID:     meta.KeyID,
+				Status:    status,
+				LatencyMs: int(time.Since(start).Milliseconds()),
+			})
+		}
 		if ok {
 			return nil
 		}
@@ -95,13 +126,15 @@ func exhaust(w http.ResponseWriter) {
 }
 
 // attempt sends one request at one lane. True = response fully relayed.
-func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model string, body []byte) bool {
+// attempt sends one request at one lane. ok = response fully relayed; the
+// second return is the upstream HTTP status (0 before a status was seen).
+func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model string, body []byte) (bool, int) {
 	key := l.NextKey()
 	out := rename(body, model, l.Params)
 	req, err := http.NewRequest(http.MethodPost,
 		strings.TrimSuffix(l.URL, "/")+"/chat/completions", strings.NewReader(string(out)))
 	if err != nil {
-		return false
+		return false, 0
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if key != "" {
@@ -117,7 +150,7 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 			_ = resp.Body.Close()
 		}
 		l.CoolLane(defaultCool)
-		return false
+		return false, 0
 	}
 	defer resp.Body.Close()
 
@@ -131,11 +164,11 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 	if resp.StatusCode == http.StatusTooManyRequests {
 		l.CoolKey(key, keyCool)
 		l.CoolLane(cool)
-		return false
+		return false, resp.StatusCode
 	}
 	if resp.StatusCode >= 500 {
 		l.CoolLane(cool)
-		return false
+		return false, resp.StatusCode
 	}
 
 	for k, vs := range resp.Header {
@@ -151,21 +184,21 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
 			if _, werr := w.Write(buf[:n]); werr != nil {
-				return true // client bailed; stop here quietly.
+				return true, resp.StatusCode // client bailed; stop here quietly.
 			}
 			if flusher != nil {
 				flusher.Flush()
 			}
 		}
 		if rerr == io.EOF {
-			return true
+			return true, resp.StatusCode
 		}
 		if rerr != nil {
 			// Upstream died mid-body. The 200 + partial bytes are already on
 			// the wire, so no further lane attempt or 502 append is possible:
 			// the chain considers itself done either way.
 			l.CoolLane(defaultCool)
-			return true
+			return true, resp.StatusCode
 		}
 	}
 }

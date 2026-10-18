@@ -6,22 +6,38 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/NaveenSingh9999/a0/internal/alias"
 	"github.com/NaveenSingh9999/a0/internal/lane"
 	"github.com/NaveenSingh9999/a0/internal/relay"
 )
 
+// KeyGate answers public-mode auth questions; nil disables gating (local
+// mode). Allow returns "" ok=false when the key is missing or invalid.
+type KeyGate interface {
+	Allow(key string) (keyID string, ok bool)
+}
+
 // New builds the wing's http surface.
 //   - GET  /healthz              → {"ok":true,"lanes":N}
 //   - GET  /v1/models            → categories only (plus lane ctx/caps metadata)
 //   - POST /v1/chat/completions  → relay (errors shaped OpenAI-style)
-func New(r *relay.Relay) http.Handler {
+//
+// In public mode (gate != nil) every /v1 route requires a valid virtual key
+// via `Authorization: Bearer sk-a0-…` or `x-api-key`.
+func New(r *relay.Relay, gate KeyGate) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "lanes": len(r.Lanes)})
 	})
 	mux.HandleFunc("GET /v1/models", func(w http.ResponseWriter, req *http.Request) {
+		if gate != nil {
+			if _, ok := auth(req, gate); !ok {
+				writeErr(w, http.StatusUnauthorized, "invalid or missing api key")
+				return
+			}
+		}
 		var data []map[string]any
 		for _, id := range alias.IDs {
 			entry := map[string]any{
@@ -39,6 +55,16 @@ func New(r *relay.Relay) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": data})
 	})
 	mux.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, req *http.Request) {
+		// Auth before rate-limit body reads: garbage keys shouldn't cost I/O.
+		var keyID string
+		if gate != nil {
+			id, ok := auth(req, gate)
+			if !ok {
+				writeErr(w, http.StatusUnauthorized, "invalid or missing api key")
+				return
+			}
+			keyID = id
+		}
 		req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
 		var body json.RawMessage
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
@@ -67,7 +93,7 @@ func New(r *relay.Relay) http.Handler {
 			writeErr(w, http.StatusInternalServerError, rerr.Error())
 			return
 		}
-		if rerr := r.Chat(w, body); rerr != nil && !errors.Is(rerr, relay.ErrExhausted) {
+		if rerr := r.ChatMeta(w, body, relay.Meta{KeyID: keyID}); rerr != nil && !errors.Is(rerr, relay.ErrExhausted) {
 			// relay already streams on success and wrote the 502 on exhaustion;
 			// anything else is a client-format problem we have not yet touched w for.
 			writeErr(w, http.StatusBadRequest, rerr.Error())
@@ -101,6 +127,23 @@ func headInfo(c lane.HTTPClient, cat string, lanes []*lane.Lane) (int, capsInfo)
 		}
 	}
 	return 0, capsInfo{}
+}
+
+// auth extracts the virtual key from `Authorization: Bearer …` / `x-api-key`
+// and asks the gate. gate == nil means local mode: allowed, empty id.
+func auth(r *http.Request, gate KeyGate) (string, bool) {
+	if gate == nil {
+		return "", true
+	}
+	key := r.Header.Get("x-api-key")
+	if key == "" {
+		if h := r.Header.Get("Authorization"); h != "" {
+			key = strings.TrimPrefix(h, "Bearer ")
+		}
+	}
+	key = strings.TrimSpace(key)
+	id, ok := gate.Allow(key)
+	return id, ok
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

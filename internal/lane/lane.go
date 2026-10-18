@@ -89,6 +89,15 @@ func Load(path string) ([]*Lane, error) {
 	return lanes, nil
 }
 
+// Prepare initializes runtime state (keyring/cooldowns/clocks) on lanes that
+// arrived pre-decoded from the control plane — Load does this internally.
+func Prepare(lanes []*Lane) []*Lane {
+	for _, l := range lanes {
+		newLane(l)
+	}
+	return lanes
+}
+
 func decode(raw []byte) ([]*Lane, error) {
 	clean := func(arr []*Lane) []*Lane {
 		out := arr[:0:0]

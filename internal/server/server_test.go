@@ -64,7 +64,7 @@ func do(h http.Handler, method, path string, body []byte) *httptest.ResponseReco
 
 func TestServerE2E(t *testing.T) {
 	lanes := fakeLanes(t)
-	h := New(relay.New(http.DefaultClient, lanes))
+	h := New(relay.New(http.DefaultClient, lanes), nil)
 
 	t.Run("healthz", func(t *testing.T) {
 		w := do(h, "GET", "/healthz", nil)
@@ -134,7 +134,7 @@ func TestServerE2E(t *testing.T) {
 
 func TestOversizeBodyRejected(t *testing.T) {
 	lanes := fakeLanes(t)
-	h := New(relay.New(http.DefaultClient, lanes))
+	h := New(relay.New(http.DefaultClient, lanes), nil)
 	big := `{"model":"a0/coder","messages":[` + strings.Repeat(`{"role":"user","content":"x"},`, 40_000) + `{"role":"user","content":"y"}]}`
 	w := do(h, "POST", "/v1/chat/completions", []byte(big))
 	if w.Code != 413 {
