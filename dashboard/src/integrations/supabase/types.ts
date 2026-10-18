@@ -46,6 +46,7 @@ export interface Database {
           revoked?: boolean;
           last_used_at?: string | null;
         };
+        Relationships: [];
       };
       usage_events: {
         Row: {
@@ -54,6 +55,7 @@ export interface Database {
           lane: string;
           model: string;
           virtual_key: string | null;
+          node: string | null;
           in_tok: number;
           out_tok: number;
           status: number;
@@ -65,12 +67,14 @@ export interface Database {
           lane: string;
           model: string;
           virtual_key?: string | null;
+          node?: string | null;
           in_tok?: number;
           out_tok?: number;
           status: number;
           latency_ms?: number;
         };
         Update: { status?: number };
+        Relationships: [];
       };
       lane_health: {
         Row: {
@@ -86,6 +90,7 @@ export interface Database {
           detail?: string | null;
         };
         Update: { detail?: string | null };
+        Relationships: [];
       };
       nodes: {
         Row: {
@@ -116,11 +121,21 @@ export interface Database {
           last_heartbeat_at?: string | null;
           lanes_reported?: Json | null;
         };
+        Relationships: [];
       };
     };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
 }
 

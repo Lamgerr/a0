@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Loader } from "@/components/ui/Loader";
@@ -25,8 +25,6 @@ export default function ProtectedLayout() {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
   return (
-    <DashboardLayout>
-      <Outlet />
-    </DashboardLayout>
+    <DashboardLayout />
   );
 }

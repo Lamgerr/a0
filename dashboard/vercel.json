@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    { "source": "/keys", "destination": "/dashboard/keys", "permanent": false },
+    { "source": "/usage", "destination": "/dashboard/usage", "permanent": false },
+    { "source": "/models", "destination": "/dashboard/models", "permanent": false },
+    { "source": "/nodes", "destination": "/dashboard/nodes", "permanent": false },
+    { "source": "/login", "destination": "/auth", "permanent": false },
+    { "source": "/signin", "destination": "/auth", "permanent": false }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

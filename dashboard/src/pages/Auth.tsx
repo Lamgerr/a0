@@ -75,7 +75,6 @@ export default function Auth() {
         options: { redirectTo },
       });
       if (error) throw error;
-            // not yet configured in the a00 dashboard.
     } catch (err: any) {
       setIsLoading(false);
       const raw = String(err?.message || err || '');

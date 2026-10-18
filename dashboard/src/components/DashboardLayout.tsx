@@ -1,16 +1,6 @@
-import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import {
-  Activity,
-  BarChart3,
-  KeyRound,
-  LayoutDashboard,
-  LogOut,
-  Server,
-} from "lucide-react";
+import { AppShell, TopBar, Ico, btn } from "@/components/custom/squid-app";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,94 +9,95 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/dashboard/keys", label: "API Keys", icon: KeyRound },
-  { to: "/dashboard/usage", label: "Usage", icon: BarChart3 },
-  { to: "/dashboard/models", label: "Models", icon: Activity },
-  { to: "/dashboard/nodes", label: "Nodes", icon: Server },
+  { to: "/dashboard", label: "Overview", end: true },
+  { to: "/dashboard/usage", label: "Usage" },
+  { to: "/dashboard/keys", label: "API Keys" },
+  { to: "/dashboard/models", label: "Models" },
+  { to: "/dashboard/nodes", label: "Nodes" },
 ];
 
-export default function DashboardLayout({ children }: { children?: never }) {
+/* One underline-nav row under the top bar; overrides keep sa-tab visuals
+   for router Links (aria-selected lives on buttons, not links). */
+const SHELL_CSS = `
+.sa-tabs-wrap { max-width: 1120px; margin: 0 auto; padding: 0 var(--sa-gut); }
+.sa-tab.is-active { color: var(--sa-text); border-bottom-color: var(--sa-text); }
+.sa-avatar { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; background: var(--sa-bg-4); color: var(--sa-text); font: 500 10px/1 var(--sa-mono); }
+.sa-demo-note { display: flex; align-items: center; gap: 8px; padding: 8px var(--sa-gut); color: var(--sa-warn); font-size: 12px; background: color-mix(in srgb, var(--sa-warn) 7%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--sa-warn) 25%, var(--sa-line)); }
+`;
+
+export default function DashboardLayout() {
   const { user, signOut, controlPlaneConfigured } = useAuth();
   const navigate = useNavigate();
   const initial = (user?.email?.[0] ?? "d").toUpperCase();
 
   return (
-    <div className="flex min-h-screen w-full bg-background text-foreground">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card/50 p-4 md:flex">
-        <div className="mb-8 flex items-center gap-2 px-2 pt-1">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary font-mono text-lg font-bold text-primary-foreground">
-            a0
-          </span>
-          <div className="leading-tight">
-            <div className="font-semibold">a0 control</div>
-            <div className="text-[11px] text-muted-foreground">
-              {controlPlaneConfigured ? "squidcloud" : "local mode"}
-            </div>
-          </div>
+    <AppShell>
+      <style>{SHELL_CSS}</style>
+      <TopBar
+        home="/"
+        crumbs={[{ label: "a0", to: "/dashboard" }, { label: "Console" }]}
+      >
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={`${btn("ghost", "sm")} gap-2`}>
+              <span className="sa-avatar" aria-hidden="true">{initial}</span>
+              <span className="hide-sm">{user?.email ?? "demo@a0.local"}</span>
+              <Ico.Chevron size={12} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-mono text-xs">
+              {user?.email ?? "demo@a0.local"}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => signOut().then(() => navigate("/"))}
+              className="gap-2"
+            >
+              <Ico.ArrowLeft size={13} />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TopBar>
+      {controlPlaneConfigured ? null : (
+        <div className="sa-demo-note" role="status">
+          <Ico.Info size={13} />
+          Control plane offline — browsing with a demo identity.
         </div>
-        <nav className="flex flex-1 flex-col gap-1">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+      )}
+      <nav className="sa-tabs-wrap">
+        <div className="sa-tabs" aria-label="Console sections">
+          {NAV.map(({ to, label, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                  isActive &&
-                    "bg-accent font-medium text-foreground shadow-[inset_2px_0_0_var(--primary)]",
-                )
-              }
+              className={({ isActive }) => `sa-tab${isActive ? " is-active" : ""}`}
             >
-              <Icon className="h-4 w-4" />
               {label}
             </NavLink>
           ))}
-        </nav>
-        <div className="text-[11px] text-muted-foreground/60">
-          wings: interchangeable · keys: revocable
         </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-end gap-3 border-b bg-background/80 px-4 backdrop-blur">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="bg-primary/20 text-[11px] text-primary">
-                    {initial}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="hidden text-xs text-muted-foreground sm:inline">
-                  {user?.email ?? "demo@a0.local"}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="font-mono text-xs">
-                {user?.email ?? "demo@a0.local"}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => signOut().then(() => navigate("/"))}
-                className="gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
-        <main className="flex-1 p-4 md:p-8">{<Outlet />}</main>
-        <footer className="px-8 py-4 text-center text-[11px] text-muted-foreground/50">
-          a0 — a squidcloud product
-        </footer>
-      </div>
-    </div>
+      </nav>
+      <main className="sa-wrap">
+        <Outlet />
+      </main>
+      <footer
+        style={{
+          padding: "0 var(--sa-gut) 40px",
+          textAlign: "center",
+          fontSize: 11,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--sa-dim)",
+          fontFamily: "var(--sa-mono)",
+        }}
+      >
+        a0 — a squidcloud product
+      </footer>
+    </AppShell>
   );
 }

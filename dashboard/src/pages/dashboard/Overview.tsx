@@ -1,104 +1,125 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArrowRight, Activity, KeyRound, Server, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+  PageHead,
+  Panel,
+  Row,
+  Stat,
+  Stats,
+  Pill,
+  Note,
+  CodeBlock,
+  btn,
+  Ico,
+  SecHead,
+} from "@/components/custom/squid-app";
 import { CATEGORIES, A0_BASE_URL } from "@/lib/a0";
 import { listVirtualKeys } from "@/hooks/use-api-keys";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase, hasSupabaseEnv } from "@/integrations/supabase/client";
+import type { NodeRow } from "@/integrations/supabase/types";
+
+const QUICK_START = `from openai import OpenAI
+
+client = OpenAI(
+    base_url="${A0_BASE_URL}/v1",
+    api_key="sk-a0-…",       # a virtual key from the Keys page
+)
+
+r = client.chat.completions.create(
+    model="a0/coder",        # categories, never raw models
+    messages=[{"role": "user", "content": "refactor this test"}],
+)
+
+print(r.choices[0].message.content)`;
 
 export default function Overview() {
   const { controlPlaneConfigured } = useAuth();
   const keys = useQuery({ queryKey: ["virtual_keys"], queryFn: listVirtualKeys });
+  const nodes = useQuery({
+    queryKey: ["nodes_overview"],
+    queryFn: async (): Promise<NodeRow[]> => {
+      if (!hasSupabaseEnv) return [];
+      const { data } = await supabase.from("nodes").select("*");
+      return data ?? [];
+    },
+  });
 
-  const stats = [
-    {
-      icon: KeyRound,
-      label: "Active keys",
-      value: (keys.data?.length ?? 0).toString(),
-      hint: controlPlaneConfigured ? "virtual keys on the fly" : "demo store",
-    },
-    {
-      icon: Server,
-      label: "Wings",
-      value: "local only",
-      hint: "M4 attaches more via node flow",
-    },
-    {
-      icon: Zap,
-      label: "Free pool",
-      value: "xkiro · llm7 · openrouter",
-      hint: "builtin chain, probed hourly",
-    },
-  ];
+  const activeKeys = (keys.data ?? []).filter((k) => !k.revoked);
+  const nodesList = nodes.data ?? [];
+  const online = nodesList.filter((n) => n.status === "online");
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Overview</h1>
-        <p className="text-sm text-muted-foreground">
-          Gateway posture at a glance.
-        </p>
-      </div>
+    <div>
+      <PageHead
+        eyebrow="a0 / console"
+        title="Overview"
+        desc="Gateway posture at a glance — keys, wings, and the free pool."
+        actions={
+          <>
+            <Link to="/dashboard/nodes" className={btn("default", "sm")}>
+              Attach a wing
+            </Link>
+            <Link to="/dashboard/keys" className={btn("primary", "sm")}>
+              New key <Ico.Arrow size={13} />
+            </Link>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {stats.map(({ icon: Icon, label, value, hint }) => (
-          <Card key={label}>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-primary" /> {label}
-              </CardDescription>
-              <CardTitle className="truncate text-base">{value}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-xs text-muted-foreground/70">
-              {hint}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Stats>
+        <Stat
+          label="Active keys"
+          value={activeKeys.length}
+          sub={controlPlaneConfigured ? "hashed · shown once · 60s edge cache" : "demo store"}
+        />
+        <Stat
+          label="Wings online"
+          value={controlPlaneConfigured ? online.length : "—"}
+          sub={
+            controlPlaneConfigured
+              ? `${nodesList.length} attached · heartbeat 30s`
+              : "control plane offline"
+          }
+        />
+        <Stat
+          label="Endpoint"
+          value={<span className="sa-num">{A0_BASE_URL}</span>}
+          sub="OpenAI-compatible · /v1/chat/completions"
+        />
+        <Stat label="Free pool" value="3 lanes" sub="xkiro · llm7 · openrouter" />
+      </Stats>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Quick start</CardTitle>
-          <CardDescription>
-            The wing serves <code className="text-primary">{A0_BASE_URL}</code> in dev.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <pre className="overflow-x-auto rounded-lg border bg-background p-4 text-xs leading-relaxed">
-            <code>{`base_url = "${A0_BASE_URL}"
-api_key  = "<your virtual key>"
-model    = "a0/coder"   # categories, never raw models`}</code>
-          </pre>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((c) => (
-              <Badge key={c.id} variant="secondary" className="font-mono text-[11px]">
-                {c.id}
-              </Badge>
-            ))}
+      {!controlPlaneConfigured && (
+        <div style={{ marginTop: 16 }}>
+          <Note tone="warn" title="Demo mode.">
+            The control plane env is missing from this build — the panel runs
+            with an in-memory store so every page stays browsable.
+          </Note>
+        </div>
+      )}
+
+      <div style={{ marginTop: 24 }}>
+        <Panel title="Quick start" desc="Any OpenAI SDK or framework — point it at a wing." flush>
+          <div style={{ padding: 16 }}>
+            <CodeBlock code={QUICK_START} lang="python" wrap />
           </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex gap-3">
-        <Button asChild variant="secondary" className="gap-2">
-          <Link to="/dashboard/keys">
-            Make a key <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
-        <Button asChild variant="outline" className="gap-2">
-          <Link to="/dashboard/nodes">
-            <Activity className="h-4 w-4" /> Attach a wing
-          </Link>
-        </Button>
+        </Panel>
       </div>
+
+      <SecHead
+        title="The categories are the product"
+        desc="Request a category — the chain resolves to the best usable free model at request time."
+      />
+      <Panel flush>
+        {CATEGORIES.map((c) => (
+          <Row
+            key={c.id}
+            label={<code className="sa-mono">{c.id}</code>}
+            desc={c.desc}
+          />
+        ))}
+      </Panel>
     </div>
   );
 }
