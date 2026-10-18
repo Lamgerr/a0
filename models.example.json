@@ -1,5 +1,5 @@
 {
-  "_comment": "a0 wing lane sheet — one OpenAI-compatible upstream (lane) per entry, tried in chain order per category until one answers. Copy to models.json (gitignored) on any wing. Schema core is dex-compatible (dex ignores a0's extra fields); a0 adds: keys (key pool, rotated with cooldown), parameters (body-merge into every request), headers (extra request headers).",
+  "_comment": "a0 wing lane sheet — one OpenAI-compatible upstream (lane) per entry, tried in chain order per category until one answers. Copy to models.json (gitignored) on any wing. Schema core is dex-compatible (dex ignores a0's extra fields); a0 adds: keys (key pool, rotated with cooldown), params (body-merge into every request), headers (extra request headers).",
   "chain": [
     {
       "name": "xkiro",
@@ -14,7 +14,7 @@
       "url": "https://api.llm7.io/v1",
       "key": "",
       "model": "GLM-5.3-Flash",
-      "parameters": {"reasoning_effort": "low"}
+        "params": {"reasoning_effort": "low"}
     },
     {
       "name": "openrouter",

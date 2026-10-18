@@ -23,17 +23,17 @@ type Clock func() time.Time
 
 // Lane is one upstream provider card.
 type Lane struct {
-	Name        string `json:"name"`
-	URL         string `json:"url"`
-	Key         string `json:"key"`
-	Keys        []string
-	Model       string `json:"model"`
-	VisionModel string `json:"vision_model"`
-	Vision      bool
-	StreamOnly  bool `json:"stream_only"`
-	Params      Params
-	Headers     map[string]string
-	Public      *bool
+	Name        string            `json:"name"`
+	URL         string            `json:"url"`
+	Key         string            `json:"key"`
+	Keys        []string          `json:"keys"`
+	Model       string            `json:"model"`
+	VisionModel string            `json:"vision_model"`
+	Vision      bool              `json:"vision"`
+	StreamOnly  bool              `json:"stream_only"`
+	Params      Params            `json:"params"`
+	Headers     map[string]string `json:"headers"`
+	Public      *bool             `json:"public"`
 	disabled    bool
 
 	mu       sync.Mutex
