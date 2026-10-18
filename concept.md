@@ -8,6 +8,7 @@ Free inference exists, but it is scattered: every lane has different limits, key
 
 ## Goal
 
+- **Categories are the product.** Users never pick raw models — `/v1/models` exposes only a0 categories (`a0/flagship`, `a0/reasoning`, `a0/coder`, `a0/vision`, `a0/fast`, `a0/omni`, `a0/long`); requests with any other model id get 400 + the valid list; each category rides a built-in lane chain (below) where chain order is the failover. Raw `vendor/model` passthrough is admin-key-only.
 - `POST /v1/chat/completions` — OpenAI wire, SSE streaming, tool calls, vision passthrough
 - `GET /v1/models` — merged live catalog: friendly aliases + all raw free models
 - Failover: 429/5xx/timeout rolls to the next lane honoring Retry-After, with a retry budget logged per attempt
