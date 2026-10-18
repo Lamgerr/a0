@@ -26,7 +26,8 @@
 2. **Retry-After honored above hardcoded cooldowns.** Test: upstream returns 429 with `Retry-After: 90`; same next request inside 90s picks the *next lane*, not the cooled one. (Task 6)
 3. **Timeout lane isolation:** one dead lane must never stall the chain beyond its own timeouts (10s connect/60s stream) — other lanes still answer. Test: fake lane with `time.Sleep`, assert fallback path succeeds. (Task 6)
 4. **`models.json` unknown-field tolerance:** dex-shaped file with extra keys must parse byte-identical to today's chain. Test: fixture with junk fields parses. (Task 1)
-5. **Keyless lane with empty key:** chain must still attempt llm7-anon lane and succeed. Test: lane with `key:""`, upstream accepts, forwarded without `Authorization`. (Task 4)
+5. **Unknown model id rejected with category list:** body model `gpt-4o` → 400 containing all seven `a0/*` ids — no silent remap. Test: server-level (Task 8).
+6. **Keyless lane with empty key:** chain must still attempt llm7-anon lane and succeed. Test: lane with `key:""`, upstream accepts, forwarded without `Authorization`. (Task 4)
 
 ---
 
@@ -82,23 +83,42 @@
 - [ ] **Step 4: Run — PASS.**
 - [ ] **Step 5: Commit** `feat(catalog): probe lane /v1/models and merge`.
 
-### Task 4: Relay — single-lane non-stream passthrough
+### Task 4: Category table + resolution
+
+**Files:**
+- Create: `internal/alias/alias.go`
+- Test: `internal/alias/alias_test.go`
+
+**Interfaces:**
+- Consumes: `lane.Load` output.
+- Produces:
+  - `var Categories = map[string][]string` — id → lane-chain, pinned to concept.md table: flagship `[xkiro@qwen/qwen3.8-max:free, llm7@glm-5.3, openrouter@openrouter/free]`, reasoning `[xkiro@qwen/qwen3.7-max:free, openrouter@nemotron-3-ultra-550b-a55b:free, xkiro@cohere/command-a-reasoning]`, coder `[xkiro@qwen/qwen3-coder-plus:free, llm7@deepseek-v4-pro, groq@qwen/qwen3.8-27b, openrouter@cohere/north-mini-code:free]`, vision `[gemini-direct@gemini-3.8-flash, xkiro@qwen/qwen3.7-plus:free, openrouter@nvidia/nemotron-3.5-super-vl:free]`, fast `[groq@gpt-oss-120b, xkiro@qwen/qwen3.7-flash:free, llm7@GLM-5.3-Flash]`, omni `[openrouter@thinkingmachines/inkling:free]`, long `[xkiro@qwen/qwen3.8-max:free, llm7@glm-5.3]`.
+  - `func Resolve(cat string, lanes []Lane) ([]ResolvedLane, error)` — `type ResolvedLane{ L Lane; Model string }`, lanes missing from the config pruned (admins can shrink, not grow); unknown → `ErrUnknown` (message lists all valid ids).
+  - `var IDs []string` (display list for /v1/models + 400 body).
+
+- [ ] **Step 1: Failing test** — `Resolve("a0/coder", cfg)` → first element is xkiro + `qwen/qwen3-coder-plus` and skips absent lanes; `Resolve("gpt-4o", _)` errors with all seven names in message.
+- [ ] **Step 2: FAIL.**
+- [ ] **Step 3: Implement** table + resolution.
+- [ ] **Step 4: PASS.**
+- [ ] **Step 5: Commit** `feat(alias): category table is the only public model surface`.
+
+### Task 5: Relay — single-lane non-stream passthrough
 
 **Files:**
 - Create: `internal/relay/relay.go`
 - Test: `internal/relay/relay_test.go`
 
 **Interfaces:**
-- Consumes: `Lane`, `lane.HTTPClient`.
+- Consumes: `Lane`, `lane.HTTPClient`, `alias.Resolve`+`alias.ErrUnknown`.
 - Produces:
   - `type Relay struct { C HTTPClient; Lanes []Lane; Log *log.Logger }`
-  - `func (r *Relay) Chat(w http.ResponseWriter, body []byte)` — method sets content-type, rewrites `model` when lane.Model set and body model matches lane builtin, injects Authorization/extra headers/body params, forwards upstream response (status + body) verbatim; writes `X-A0-Lane: <name>`.
+  - `func (r *Relay) Chat(w http.ResponseWriter, body []byte) error` — resolves request `model` via `alias.Resolve` (server pre-validated), iterates the resolved chain rewriting `model` to the lane's concrete id, injects key/extra headers/body params, forwards upstream response verbatim (status+body); writes `X-A0-Lane: <name>`; returns the error for the server layer to render 400/502.
   - `func forward(t *http.Request, l *Lane) (*http.Response, error)` unexported.
 
 - [ ] **Step 1: Failing test** — upstream `httptest` returns 200 JSON; assert passthrough equality + `X-A0-Lane` header + `Bearer key` sent when set, absent when keyless (Review Focus 5).
 - [ ] **Step 2: FAIL → implement → PASS → commit** `feat(relay): single-lane chat passthrough`.
 
-### Task 5: SSE streaming passthrough
+### Task 6: SSE streaming passthrough
 
 **Files:**
 - Modify: `internal/relay/relay.go` (add `stream` branch)
@@ -110,7 +130,7 @@
 
 - [ ] Failing test → FAIL → implement (single `bufio`-free `io.Copy(w, resp.Body)` with per-read `Flusher.Flush`) → PASS → commit `feat(relay): sse streaming without buffering`.
 
-### Task 6: Catch and failover
+### Task 7: Catch and failover
 
 **Files:**
 - Modify: `internal/relay/relay.go` (chain loop + cooldown calls)
@@ -125,7 +145,7 @@
 
 - [ ] Failing tests → FAIL → implement → PASS ×3 → commit `feat(relay): lane failover with retry-after cooldowns`.
 
-### Task 7: Server routes + main + e2e
+### Task 8: Server routes + main + e2e
 
 **Files:**
 - Create: `internal/server/server.go`, `main.go`
@@ -134,13 +154,13 @@
 **Interfaces:**
 - Consumes: `relay.Relay`, `lane.Load`, `lane.Probe`.
 - Produces:
-  - `func New(r *relay.Relay, h http.Handler /*catalog*/) http.Handler` — routes: `POST /v1/chat/completions` → relay, `GET /v1/models` → merged JSON, `GET /healthz` → `{"ok":true,"lanes":N}`.
+  - `func New(r *relay.Relay) http.Handler` — routes: `POST /v1/chat/completions` → alias-validate (`ErrUnknown` → 400 JSON listing `alias.IDs`) → relay; `GET /v1/models` → category list only (ids + primary-lane ctx/caps); `GET /healthz` → `{"ok":true,"lanes":N}`.
   - `main.go`: read `A0_PORT/A0_MODE`, build lanes, start `ListenAndServe`, graceful shutdown on SIGINT.
 - e2e test: full server behind `httptest`, fake upstream lanes wired programmatically (serving both `/models` and `/chat/completions`), one 429-lane first, stream and non-stream both asserted through the public surface.
 
 - [ ] Failing e2e test → FAIL → implement server+main → PASS → `go vet ./...` clean → commit `feat(server): routes, healthz, main bootstrap, e2e`.
 
-### Task 8: Config glue + local lane wiring
+### Task 9: Config glue + local lane wiring
 
 **Files:**
 - Create/Modify: `models.example.json` (final dex-schema + a0-extension example), `.env.example`
@@ -149,7 +169,7 @@
 
 - [ ] Failing test → FAIL → implement → PASS → commit `feat(config): env defaults and example chain`.
 
-### Task 9: Live smoke (device)
+### Task 10: Live smoke (device)
 
 **Files:** none new — `docs`-less per preference, output only.
 
