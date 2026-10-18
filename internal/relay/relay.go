@@ -16,10 +16,7 @@ import (
 )
 
 // timeouts — one lane can never stall the chain beyond its own budget.
-const (
-	connectTimeout = 10 * time.Second
-	chatTimeout    = 60 * time.Second
-)
+const chatTimeout = 60 * time.Second
 
 // Relay owns the lane chain and the http client used to reach upstreams.
 type Relay struct {
@@ -92,7 +89,25 @@ func (r *Relay) Chat(w http.ResponseWriter, body []byte) error {
 	}
 	w.Header().Set("X-A0-Lane", l.Name)
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+	flusher, _ := w.(http.Flusher)
+	buf := make([]byte, 4096)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return nil // client bailed; upstream teardown below.
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
