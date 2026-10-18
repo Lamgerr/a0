@@ -74,6 +74,16 @@ Cloud state behind the dashboard: `usage_events` (ts, lane, model, virtual_key, 
 
 Frontend deploys to Vercel, talks to Supabase directly for data, to the gateway's `/v1/*` for playground calls (from the browser only when the gateway has a public hole — optional).
 
+## Open questions resolved (builder round 1)
+
+- **Virtual keys — source of truth is local sqlite; Supabase is a mirror.** Request-time validation only ever touches local state; the dashboard's key CRUD lands in Supabase and the gateway converges to it on a 30s poll. Supabase outage freezes *management*, never *inference*.
+- **Dashboard at m3 reads a thin read-only layer over gateway `/admin/*`**; it gains Supabase reads (history) and key writes at m4.
+- **models.json stays dex-compatible.** dex's loader (~/dex/config.py `_load_model_pool`) whitelists known fields and silently drops unknown ones — verified — so a0 extends the *same file* with key pools (`keys: [...]`), cooldown and quota constants; dex never chokes on them.
+- **xKiro's `/v1/models` is public and probeable** (live-verified 2026-10-18: 49 free chat models with access_tier/capabilities/context) — the hourly self-heal hangs on it as designed. Other lanes' catalogs are normalized the same way.
+- **Known quota constants (rpm/rpd/tok-day):** xkiro 500K tok/day (agent-gateway free tier), llm7 500K tok/day anon (1M with free email token), openrouter 20 rpm / 50 rpd (1,000 after one-time $10), groq 30 rpm / 1K rpd / 200K tok-day, kilo ~200 req/hr per IP, NIM up to 40 rpm, gemini unpublished (per-project console). gonka/gemini constants unknown — the ledger learns them empirically at runtime.
+- **Keyless lanes are shared per-IP buckets, not multiplied** — kilo/pollinations/ovh/llm7-anon quota is one bucket per machine IP, so key pools only apply to keyed lanes.
+- **keys on this machine today:** xKiro (set, in dex config) and OpenRouter (set, in dex config); llm7 works anonymously; groq/gemini/kilo/NIM/gonka absent — their chains validate live during the build, the rest via fake-lane e2e.
+
 ## Decisions already made
 
 By the partner: OpenAI-compatible contract; Python gateway; React/TSX/Tailwind/shadcn/Supabase/Vite dashboard; xKiro key exists; free-first.
