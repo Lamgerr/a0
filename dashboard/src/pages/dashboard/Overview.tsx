@@ -19,7 +19,11 @@ import { FREE_COUNT, fmtCtx } from "@/lib/catalog";
 import { poolModels } from "@/lib/pools";
 import { listVirtualKeys } from "@/hooks/use-api-keys";
 import { useAuth } from "@/contexts/AuthContext";
-import { hasSupabaseEnv } from "@/integrations/supabase/client";
+import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
+import { Dot } from "@/components/custom/squid-app";
+import { laneLabel } from "@/lib/lane-label";
+
+const LANE_ORDER = ["xkiro", "llm7", "openrouter", "kilo", "kilo2", "ovh", "gonka"];
 
 const QUICK_START = `from openai import OpenAI
 
@@ -40,6 +44,25 @@ export default function Overview() {
   const keys = useQuery({ queryKey: ["virtual_keys"], queryFn: listVirtualKeys });
   const activeKeys = (keys.data ?? []).filter((k) => !k.revoked);
 
+  /* live lane health — same probes the gateway reports every minute */
+  const health = useQuery({
+    queryKey: ["lane_health_overview"],
+    queryFn: async () => {
+      if (!hasSupabaseEnv) return [];
+      const { data } = await supabase
+        .from("lane_health")
+        .select("lane, ts, ok, detail")
+        .order("ts", { ascending: false })
+        .limit(24);
+      return (data ?? []) as Array<{ lane: string; ts: string; ok: boolean; detail: string | null }>;
+    },
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+  });
+  const freshest = new Map<string, { ok: boolean }>();
+  for (const h of health.data ?? []) if (!freshest.has(h.lane)) freshest.set(h.lane, h);
+  const lanes = LANE_ORDER.filter((l) => freshest.has(l));
+
   return (
     <div>
       <PageHead
@@ -58,6 +81,24 @@ export default function Overview() {
         }
       />
 
+      {lanes.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+          {lanes.map((lane) => {
+            const ok = freshest.get(lane)?.ok ?? false;
+            return (
+              <Pill
+                key={lane}
+                tone={ok ? "ok" : "err"}
+                title={ok ? "responding to probes" : "failing probes — traffic moved off it"}
+              >
+                <Dot tone={ok ? "ok" : "err"} pulse={ok} />
+                {laneLabel(lane)}
+              </Pill>
+            );
+          })}
+        </div>
+      )}
+
       <Stats>
         <Stat
           label="Active keys"
@@ -69,7 +110,7 @@ export default function Overview() {
           value="7 categories"
           sub="resolver picks per request"
         />
-        <Stat label="Free models" value={FREE_COUNT} sub="5 labs · silent failover" />
+        <Stat label="Free models" value={FREE_COUNT} sub="7 labs · silent failover" />
         <Stat label="Failover" value="silent" sub="tiered lanes, no user-visible retries" />
       </Stats>
 

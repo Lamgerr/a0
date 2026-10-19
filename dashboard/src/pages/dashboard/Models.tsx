@@ -16,6 +16,7 @@ import { CATEGORIES } from "@/lib/a0";
 import { MODELS, LABS, FREE_COUNT, fmtCtx, type CatalogModel } from "@/lib/catalog";
 import { poolModels } from "@/lib/pools";
 import { laneLabel } from "@/lib/lane-label";
+import { LabLogo, labTitle } from "@/components/custom/lab-logos";
 import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
 
 /* Pool concept chips — capability language only, no infrastructure. */
@@ -53,51 +54,7 @@ const POOL_META: Record<
   },
 };
 
-/* ── Lab marks: letter tiles with a per-lab accent ring ── */
-const LAB_ACCENT: Record<string, number> = {
-  anthropic: 24, openai: 210, google: 0, qwen: 200, mistral: 32,
-  deepseek: 192, nvidia: 100, minimax: 280, mimo: 42, grok: 330,
-  kimi: 262, tencent: 160, meituan: 12, stealth: 0, api: 220,
-  "opencode-zen": 84,
-};
-const LAB_MARK: Record<string, string> = {
-  anthropic: "A", openai: "O", google: "G", qwen: "Q", mistral: "M",
-  deepseek: "D", nvidia: "N", minimax: "X", mimo: "m", grok: "X",
-  kimi: "K", tencent: "T", meituan: "L", stealth: "S", api: "C",
-  "opencode-zen": "Z",
-};
-function labName(lab: string): string {
-  if (lab === "api") return "Cohere";
-  if (lab === "opencode-zen") return "LongCat";
-  return lab.charAt(0).toUpperCase() + lab.slice(1).replace(/ai$/, "AI");
-}
-
-function LabMark({ lab, size = 30 }: { lab: string; size?: number }) {
-  const accent = LAB_ACCENT[lab] ?? 220;
-  return (
-    <span
-      aria-hidden="true"
-      className="sa-mono"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: size,
-        height: size,
-        flex: "none",
-        borderRadius: Math.round(size * 0.24),
-        background: "var(--sa-bg-3)",
-        border: "1px solid var(--sa-line-2)",
-        boxShadow: `inset 0 0 0 1.5px hsl(${accent} 55% 62% / 0.35)`,
-        color: `hsl(${accent} 30% 85%)`,
-        font: `500 ${Math.round(size * 0.44)}px/1 var(--sa-mono)`,
-        letterSpacing: 0,
-      }}
-    >
-      {LAB_MARK[lab] ?? lab[0].toUpperCase()}
-    </span>
-  );
-}
+/* ── Lab marks: real brand marks, monogram fallback where none exists ── */
 
 function CapChips({ m, compact }: { m: CatalogModel; compact?: boolean }) {
   const chips: string[] = [];
@@ -222,7 +179,7 @@ export default function Models() {
                   <div style={{ display: "grid", gap: 8 }}>
                     {picks.map((m, i) => (
                       <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                        <LabMark lab={m.lab} size={22} />
+                        <LabLogo lab={m.lab} size={22} tile />
                         <span style={{ fontSize: 12.5, color: "var(--sa-text)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {m.name}
                         </span>
@@ -268,8 +225,8 @@ export default function Models() {
                 className={btn(lab === l ? "default" : "ghost", "sm")}
                 onClick={() => setLab(lab === l ? "all" : l)}
               >
-                <LabMark lab={l} size={16} />
-                {labName(l)}
+                <LabLogo lab={l} size={16} />
+                {labTitle(l)}
               </button>
             ))}
           </div>
@@ -278,7 +235,7 @@ export default function Models() {
             {models.map((m) => (
               <Panel key={m.id} flush>
                 <div style={{ display: "flex", gap: 11, padding: "13px 14px", alignItems: "center" }}>
-                  <LabMark lab={m.lab} />
+                  <LabLogo lab={m.lab} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--sa-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {m.name}
