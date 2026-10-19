@@ -21,9 +21,6 @@ import { listVirtualKeys } from "@/hooks/use-api-keys";
 import { useAuth } from "@/contexts/AuthContext";
 import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
 import { Dot } from "@/components/custom/squid-app";
-import { laneLabel } from "@/lib/lane-label";
-
-const LANE_ORDER = ["xkiro", "llm7", "openrouter", "kilo", "kilo2", "ovh", "gonka"];
 
 const QUICK_START = `from openai import OpenAI
 
@@ -44,24 +41,21 @@ export default function Overview() {
   const keys = useQuery({ queryKey: ["virtual_keys"], queryFn: listVirtualKeys });
   const activeKeys = (keys.data ?? []).filter((k) => !k.revoked);
 
-  /* live lane health — same probes the gateway reports every minute */
+  /* live lane health — tiers only, via the public lane_status view */
   const health = useQuery({
-    queryKey: ["lane_health_overview"],
+    queryKey: ["lane_status_overview"],
     queryFn: async () => {
       if (!hasSupabaseEnv) return [];
       const { data } = await supabase
-        .from("lane_health")
-        .select("lane, ts, ok, detail")
-        .order("ts", { ascending: false })
-        .limit(24);
-      return (data ?? []) as Array<{ lane: string; ts: string; ok: boolean; detail: string | null }>;
+        .from("lane_status")
+        .select("tier, ok, ts, pos")
+        .order("pos", { ascending: true });
+      return (data ?? []) as Array<{ tier: string; ok: boolean; ts: string; pos: number }>;
     },
     staleTime: 10_000,
     refetchInterval: 30_000,
   });
-  const freshest = new Map<string, { ok: boolean }>();
-  for (const h of health.data ?? []) if (!freshest.has(h.lane)) freshest.set(h.lane, h);
-  const lanes = LANE_ORDER.filter((l) => freshest.has(l));
+  const lanes = health.data ?? [];
 
   return (
     <div>
@@ -83,19 +77,16 @@ export default function Overview() {
 
       {lanes.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          {lanes.map((lane) => {
-            const ok = freshest.get(lane)?.ok ?? false;
-            return (
-              <Pill
-                key={lane}
-                tone={ok ? "ok" : "err"}
-                title={ok ? "responding to probes" : "failing probes — traffic moved off it"}
-              >
-                <Dot tone={ok ? "ok" : "err"} pulse={ok} />
-                {laneLabel(lane)}
-              </Pill>
-            );
-          })}
+          {lanes.map((l) => (
+            <Pill
+              key={l.tier}
+              tone={l.ok ? "ok" : "err"}
+              title={l.ok ? "responding to probes" : "failing probes — traffic moved off it"}
+            >
+              <Dot tone={l.ok ? "ok" : "err"} pulse={l.ok} />
+              {l.tier}
+            </Pill>
+          ))}
         </div>
       )}
 

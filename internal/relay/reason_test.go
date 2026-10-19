@@ -100,7 +100,7 @@ func TestAttemptShimsReasoningEndToEnd(t *testing.T) {
 	if !strings.Contains(body, "\"reasoning_content\":\"thinking\"") {
 		t.Fatalf("alias missing: %s", body)
 	}
-	if rr.Header().Get("X-A0-Lane") != "kilo" {
+	if rr.Header().Get("X-A0-Lane") != "Tier 4" {
 		t.Fatalf("lane header missing")
 	}
 

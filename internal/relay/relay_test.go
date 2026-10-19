@@ -71,7 +71,7 @@ func TestChatSingleLaneRenamesMergesForwards(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("downstream code = %d", w.Code)
 	}
-	if w.Header().Get("X-A0-Lane") != "xkiro" {
+	if w.Header().Get("X-A0-Lane") != "Tier 1" {
 		t.Fatalf("X-A0-Lane = %q", w.Header().Get("X-A0-Lane"))
 	}
 	if w.Body.String() != `{"id":"chatcmpl-1"}` {

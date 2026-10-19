@@ -116,7 +116,7 @@ func TestServerE2E(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("code = %d body=%q", w.Code, w.Body.String())
 		}
-		if w.Header().Get("X-A0-Lane") != "llm7" {
+		if w.Header().Get("X-A0-Lane") != "Tier 2" {
 			t.Fatalf("lane = %q — 429 lane must be skipped", w.Header().Get("X-A0-Lane"))
 		}
 	})

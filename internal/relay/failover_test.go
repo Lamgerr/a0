@@ -55,7 +55,7 @@ func TestFailoverHonorsRetryAfter(t *testing.T) {
 	if err := rel.Chat(w, req); err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
-	if w.Header().Get("X-A0-Lane") != "llm7" {
+	if w.Header().Get("X-A0-Lane") != "Tier 2" {
 		t.Fatalf("first attempt must fail over to b, served by %q", w.Header().Get("X-A0-Lane"))
 	}
 

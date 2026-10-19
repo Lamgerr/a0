@@ -15,7 +15,6 @@ import {
 import { CATEGORIES } from "@/lib/a0";
 import { MODELS, LABS, FREE_COUNT, fmtCtx, type CatalogModel } from "@/lib/catalog";
 import { poolModels } from "@/lib/pools";
-import { laneLabel } from "@/lib/lane-label";
 import { LabLogo, labTitle } from "@/components/custom/lab-logos";
 import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
 
@@ -86,23 +85,21 @@ export default function Models() {
   const searchRef = useRef<HTMLInputElement>(null);
   useSearchShortcut(searchRef);
 
-  /* Lane probes → tier pills (provider names never surface) */
+  /* Lane probes → tier pills (provider names never surface; lane_status view) */
   const health = useQuery({
     queryKey: ["lane_health_models"],
     queryFn: async () => {
       if (!hasSupabaseEnv) return [];
       const { data } = await supabase
-        .from("lane_health")
-        .select("lane, ts, ok, detail")
-        .order("ts", { ascending: false })
-        .limit(24);
-      return (data ?? []) as Array<{ lane: string; ts: string; ok: boolean; detail: string | null }>;
+        .from("lane_status")
+        .select("tier, ok, ts, pos")
+        .order("pos", { ascending: true });
+      return (data ?? []) as Array<{ tier: string; ok: boolean; ts: string; pos: number }>;
     },
     staleTime: 10_000,
     refetchInterval: 30_000,
   });
-  const freshest = new Map<string, { ok: boolean; detail: string | null }>();
-  for (const h of health.data ?? []) if (!freshest.has(h.lane)) freshest.set(h.lane, h);
+  const lanes = health.data ?? [];
 
   const models = useMemo(() => {
     const ql = q.trim().toLowerCase();
@@ -131,16 +128,16 @@ export default function Models() {
         }
       />
 
-      {freshest.size > 0 && (
+      {lanes.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
-          {[...freshest.entries()].map(([lane, h]) => (
+          {lanes.map((l) => (
             <Pill
-              key={lane}
-              tone={h.ok ? "ok" : "err"}
-              title={h.ok ? "responding to probes" : "failing probes — traffic moved off it"}
+              key={l.tier}
+              tone={l.ok ? "ok" : "err"}
+              title={l.ok ? "responding to probes" : "failing probes — traffic moved off it"}
             >
-              <Dot tone={h.ok ? "ok" : "err"} pulse={h.ok} />
-              {laneLabel(lane)}
+              <Dot tone={l.ok ? "ok" : "err"} pulse={l.ok} />
+              {l.tier}
             </Pill>
           ))}
         </div>

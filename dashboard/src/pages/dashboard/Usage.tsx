@@ -22,11 +22,10 @@ import {
   useHashState,
 } from "@/components/custom/squid-app";
 import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
-import { laneLabel } from "@/lib/lane-label";
 
 interface UsageRow {
   ts: string;
-  lane: string;
+  tier: string;
   in_tok: number;
   out_tok: number;
   status: number;
@@ -39,8 +38,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 async function fetchUsage(): Promise<UsageRow[]> {
   if (!hasSupabaseEnv) return [];
   const { data, error } = await supabase
-    .from("usage_events")
-    .select("ts, lane, in_tok, out_tok, status, latency_ms, node")
+    .from("usage_events_tiered")
+    .select("ts, tier, in_tok, out_tok, status, latency_ms, node")
     .gte("ts", new Date(Date.now() - DAY_MS).toISOString())
     .order("ts", { ascending: false })
     .limit(5000);
@@ -136,10 +135,10 @@ export default function Usage() {
 
     const lanes = new Map<string, { reqs: number; tokens: number }>();
     for (const r of rows) {
-      const l = lanes.get(r.lane) ?? { reqs: 0, tokens: 0 };
+      const l = lanes.get(r.tier) ?? { reqs: 0, tokens: 0 };
       l.reqs += 1;
       l.tokens += r.in_tok + r.out_tok;
-      lanes.set(r.lane, l);
+      lanes.set(r.tier, l);
     }
 
     const lats = rows.map((r) => r.latency_ms).sort((a, b) => a - b);
@@ -277,7 +276,7 @@ export default function Usage() {
                       return (
                         <tr key={lane}>
                           <td className="k">
-                            <Pill tone="solid">{laneLabel(lane)}</Pill>
+                            <Pill tone="solid">{lane}</Pill>
                           </td>
                           <td className="sa-num">{l.reqs.toLocaleString()}</td>
                           <td className="sa-num">{fmtK(l.tokens)}</td>

@@ -54,7 +54,7 @@ func TestChatStreamsSSEUnbuffered(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
 		t.Fatalf("downstream content-type = %q", ct)
 	}
-	if laneName := resp.Header.Get("X-A0-Lane"); laneName != "xkiro" {
+	if laneName := resp.Header.Get("X-A0-Lane"); laneName != "Tier 1" {
 		t.Fatalf("X-A0-Lane = %q", laneName)
 	}
 

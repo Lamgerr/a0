@@ -56,6 +56,26 @@ func (l *Lane) OptInPublic() bool {
 	return l.Public != nil && *l.Public
 }
 
+// tierOf maps internal lane names to their public tier label. Provider
+// plumbing never leaves the wing — clients see tiers only.
+var tierOf = map[string]string{
+	"xkiro":      "Tier 1",
+	"llm7":       "Tier 2",
+	"openrouter": "Tier 3",
+	"kilo":       "Tier 4",
+	"kilo2":      "Tier 4",
+	"ovh":        "Tier 5",
+	"gonka":      "Reserve",
+}
+
+// Tier returns the public tier label for the lane.
+func (l *Lane) Tier() string {
+	if t, ok := tierOf[l.Name]; ok {
+		return t
+	}
+	return "Tier"
+}
+
 // builtin chain when no models.json exists: xkiro -> llm7 (keyless) -> openrouter.
 // API keys come from the environment at load time; nothing is hardcoded.
 func builtin() []*Lane {

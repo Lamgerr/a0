@@ -206,7 +206,7 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 			w.Header().Add(k, v)
 		}
 	}
-	w.Header().Set("X-A0-Lane", l.Name)
+	w.Header().Set("X-A0-Lane", l.Tier())
 	w.WriteHeader(resp.StatusCode)
 	flusher, _ := w.(http.Flusher)
 	var shim *reasonShim

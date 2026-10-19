@@ -16,7 +16,6 @@ import {
   Stat,
 } from "@/components/custom/squid-app";
 import { LabLogo, SERVED_LABS } from "@/components/custom/lab-logos";
-import { laneLabel } from "@/lib/lane-label";
 import { CATEGORIES, A0_BASE_URL } from "@/lib/a0";
 import { FREE_COUNT } from "@/lib/catalog";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,9 +32,6 @@ const curl = `curl ${A0_BASE_URL}/v1/chat/completions \\
 const ENV = `export OPENAI_BASE_URL="${A0_BASE_URL}/v1"
 export OPENAI_API_KEY="sk-a0-…"`;
 
-/* ── lane order is the SLA: traffic falls through on failure ── */
-const LANE_ORDER = ["xkiro", "llm7", "openrouter", "kilo", "kilo2", "ovh", "gonka"];
-
 function timeAgo(ts: string): string {
   const s = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 1000));
   if (s < 60) return `${s}s ago`;
@@ -43,28 +39,26 @@ function timeAgo(ts: string): string {
   return `${Math.round(s / 3600)}h ago`;
 }
 
-/* ── live lane board — the hero visual ── */
+/* ── live lane board — the hero visual. Tiers only; provider plumbing never
+       leaves the wing (lane_health is anon-locked, lane_status is the view). ── */
 function LaneBoard() {
   const health = useQuery({
-    queryKey: ["lane_health_index"],
+    queryKey: ["lane_status_index"],
     queryFn: async () => {
       if (!hasSupabaseEnv) return [];
       const { data } = await supabase
-        .from("lane_health")
-        .select("lane, ts, ok, detail")
-        .order("ts", { ascending: false })
-        .limit(24);
-      return (data ?? []) as Array<{ lane: string; ts: string; ok: boolean; detail: string | null }>;
+        .from("lane_status")
+        .select("tier, ok, ts, pos")
+        .order("pos", { ascending: true });
+      return (data ?? []) as Array<{ tier: string; ok: boolean; ts: string; pos: number }>;
     },
     staleTime: 10_000,
     refetchInterval: 30_000,
   });
 
-  const freshest = new Map<string, { ts: string; ok: boolean }>();
-  for (const h of health.data ?? []) if (!freshest.has(h.lane)) freshest.set(h.lane, h);
-  const live = freshest.size > 0;
-  const lanes = live ? LANE_ORDER.filter((l) => freshest.has(l)) : LANE_ORDER;
-  const okCount = lanes.filter((l) => freshest.get(l)?.ok).length;
+  const lanes = health.data ?? [];
+  const live = lanes.length > 0;
+  const okCount = lanes.filter((l) => l.ok).length;
   const allOk = live && okCount === lanes.length;
 
   return (
@@ -79,28 +73,24 @@ function LaneBoard() {
           <Pill>demo</Pill>
         )}
         <span style={{ marginLeft: "auto", font: "400 10.5px/1 var(--sa-mono)", letterSpacing: "0.08em", color: "var(--sa-dim)", textTransform: "uppercase" }}>
-          {live && health.data?.[0] ? timeAgo(health.data[0].ts) : "—"}
+          {live && lanes[0] ? timeAgo(lanes[0].ts) : "—"}
         </span>
       </div>
       <div>
-        {lanes.map((lane, i) => {
-          const h = freshest.get(lane);
-          const ok = h?.ok ?? false;
-          return (
-            <div
-              key={lane}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: i === 0 ? "none" : "1px solid var(--sa-line)" }}
-            >
-              <Dot tone={live ? (ok ? "ok" : "err") : "neutral"} pulse={live && ok} />
-              <span className="sa-mono" style={{ font: "500 12.5px/1 var(--sa-mono)", color: "var(--sa-text)", letterSpacing: "0.02em" }}>
-                {laneLabel(lane)}
-              </span>
-              <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--sa-dim)" }}>
-                {h ? (ok ? "serving" : "failing — traffic moved off") : "probe offline"}
-              </span>
-            </div>
-          );
-        })}
+        {lanes.map((l, i) => (
+          <div
+            key={l.tier + i}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: i === 0 ? "none" : "1px solid var(--sa-line)" }}
+          >
+            <Dot tone={l.ok ? "ok" : "err"} pulse={l.ok} />
+            <span className="sa-mono" style={{ font: "500 12.5px/1 var(--sa-mono)", color: "var(--sa-text)", letterSpacing: "0.02em" }}>
+              {l.tier}
+            </span>
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--sa-dim)" }}>
+              {l.ok ? "serving" : "failing — traffic moved off"}
+            </span>
+          </div>
+        ))}
       </div>
       <div style={{ padding: "10px 16px 12px", borderTop: "1px solid var(--sa-line)" }}>
         <span style={{ fontSize: 12, lineHeight: 1.5, color: "var(--sa-mute)" }}>
