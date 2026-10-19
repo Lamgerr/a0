@@ -1,13 +1,12 @@
 /**
- * a0 model catalog snapshot (generated from upstream aggregator // 2026-10-19).
+ * a0 model catalog — free-tier snapshot (generated from upstream // 2026-10-19).
+ * Everything a0 serves at zero cost. Paid upstreams are never listed.
  * Regenerate with the catalog script when upstream rotates.
  */
 export interface CatalogModel {
   id: string;
   name: string;
   lab: string;
-  tier: "free" | "paid" | "premium";
-  free: boolean;
   modality: string;
   ctx: number;
   max_out: number;
@@ -15,335 +14,13 @@ export interface CatalogModel {
   tools: boolean;
   reasoning: boolean;
   efforts: string[];
-  in_price: number;
-  out_price: number;
 }
 
 export const MODELS: CatalogModel[] = [
   {
-    "id": "anthropic/claude-fable-5-1",
-    "name": "Fable 5.1",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 10,
-    "out_price": 50
-  },
-  {
-    "id": "anthropic/claude-opus-4.8",
-    "name": "Opus 4.8",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 5,
-    "out_price": 25
-  },
-  {
-    "id": "anthropic/claude-haiku-5.5",
-    "name": "Haiku 5.5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 128000,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 0.1,
-    "out_price": 0.5
-  },
-  {
-    "id": "anthropic/claude-sonnet-5.5",
-    "name": "Sonnet 5.5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 128000,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 2,
-    "out_price": 10
-  },
-  {
-    "id": "anthropic/claude-opus-5",
-    "name": "Opus 5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 5,
-    "out_price": 25
-  },
-  {
-    "id": "anthropic/claude-sonnet-4.6",
-    "name": "Sonnet 4.6",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "max"
-    ],
-    "in_price": 3,
-    "out_price": 15
-  },
-  {
-    "id": "anthropic/claude-sonnet-4",
-    "name": "Sonnet 4",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "high"
-    ],
-    "in_price": 3,
-    "out_price": 15
-  },
-  {
-    "id": "anthropic/claude-opus-4.6",
-    "name": "Opus 4.6",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "max"
-    ],
-    "in_price": 5,
-    "out_price": 25
-  },
-  {
-    "id": "anthropic/claude-sonnet-4.5",
-    "name": "Sonnet 4.5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "high"
-    ],
-    "in_price": 3,
-    "out_price": 15
-  },
-  {
-    "id": "anthropic/claude-fable-5",
-    "name": "Fable 5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 10,
-    "out_price": 50
-  },
-  {
-    "id": "anthropic/claude-sonnet-5",
-    "name": "Sonnet 5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 2,
-    "out_price": 10
-  },
-  {
-    "id": "anthropic/claude-opus-5.5",
-    "name": "Opus 5.5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 4,
-    "out_price": 20
-  },
-  {
-    "id": "anthropic/claude-opus-4.7",
-    "name": "Opus 4.7",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 5,
-    "out_price": 25
-  },
-  {
-    "id": "anthropic/claude-opus-4.5",
-    "name": "Opus 4.5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 200000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 5,
-    "out_price": 25
-  },
-  {
-    "id": "anthropic/claude-haiku-4.5",
-    "name": "Haiku 4.5",
-    "lab": "anthropic",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 200000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 1,
-    "out_price": 5
-  },
-  {
     "id": "cohere/command-a-plus",
     "name": "Command A+",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 436000,
     "max_out": 64000,
@@ -352,16 +29,12 @@ export const MODELS: CatalogModel[] = [
     "reasoning": true,
     "efforts": [
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "cohere/command-a-reasoning",
     "name": "Command A Reasoning",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 288768,
     "max_out": 32768,
@@ -371,32 +44,24 @@ export const MODELS: CatalogModel[] = [
     "efforts": [
       "none",
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "cohere/command-a",
     "name": "Command A",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 288000,
     "max_out": 8192,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "sensenova/sensenova-6.8-flash-lite",
     "name": "SenseNova 6.8 Flash-Lite",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
@@ -408,16 +73,12 @@ export const MODELS: CatalogModel[] = [
       "low",
       "medium",
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "cohere/north-mini-code",
     "name": "North Mini Code",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 64000,
@@ -427,700 +88,156 @@ export const MODELS: CatalogModel[] = [
     "efforts": [
       "none",
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "cohere/command-r7b-12-2024",
     "name": "Command R7B (12-2024)",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 132000,
     "max_out": 4096,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/command-r-08-2024",
     "name": "Command R (08-2024)",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 128000,
     "max_out": 4096,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/command-r-plus-08-2024",
     "name": "Command R+ (08-2024)",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 128000,
     "max_out": 4096,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/aya-expanse-32b",
     "name": "Aya Expanse 32B",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 128000,
     "max_out": 4096,
     "vision": false,
     "tools": false,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/command-a-vision",
     "name": "Command A Vision",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 128000,
     "max_out": 8192,
     "vision": true,
     "tools": false,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/north-small-translate",
     "name": "North Small Translate",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 32768,
     "max_out": 16384,
     "vision": false,
     "tools": false,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/aya-vision-32b",
     "name": "Aya Vision 32B",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 16384,
     "max_out": 4096,
     "vision": false,
     "tools": false,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/command-a-translate",
     "name": "Command A Translate",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 8992,
     "max_out": 8000,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/tiny-aya-global",
     "name": "Tiny Aya Global",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 8192,
     "max_out": 8192,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/tiny-aya-earth",
     "name": "Tiny Aya Earth",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 8192,
     "max_out": 8192,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/tiny-aya-fire",
     "name": "Tiny Aya Fire",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 8192,
     "max_out": 8192,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "cohere/tiny-aya-water",
     "name": "Tiny Aya Water",
     "lab": "api",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 8192,
     "max_out": 8192,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
-  },
-  {
-    "id": "deepseek/deepseek-v4-pro-0813",
-    "name": "DeepSeek V4 Pro 0813",
-    "lab": "deepseek",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1048576,
-    "max_out": 128000,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.28275,
-    "out_price": 0.5655
-  },
-  {
-    "id": "deepseek/deepseek-v4.1-flash",
-    "name": "DeepSeek V4.1 Flash",
-    "lab": "deepseek",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1048576,
-    "max_out": 128000,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "none",
-      "high"
-    ],
-    "in_price": 0.075,
-    "out_price": 0.3
-  },
-  {
-    "id": "deepseek/deepseek-v4-flash-0731",
-    "name": "DeepSeek V4 Flash 0731",
-    "lab": "deepseek",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1048576,
-    "max_out": 128000,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.091,
-    "out_price": 0.182
-  },
-  {
-    "id": "google/gemini-3.6-flash",
-    "name": "Gemini 3.6 Flash",
-    "lab": "google",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 0.75,
-    "out_price": 3.75
-  },
-  {
-    "id": "google/gemini-3.8-flash",
-    "name": "Gemini 3.8 Flash",
-    "lab": "google",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 0.75,
-    "out_price": 3.75
-  },
-  {
-    "id": "google/gemini-3.7-flash",
-    "name": "Gemini 3.7 Flash",
-    "lab": "google",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 0.75,
-    "out_price": 3.75
-  },
-  {
-    "id": "google/gemini-3.5-flash",
-    "name": "Gemini 3.5 Flash",
-    "lab": "google",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 1.5,
-    "out_price": 9
-  },
-  {
-    "id": "google/gemini-3.1-pro",
-    "name": "Gemini 3.1 Pro",
-    "lab": "google",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 2,
-    "out_price": 12
-  },
-  {
-    "id": "google/gemini-2.5-flash",
-    "name": "Gemini 2.5 Flash",
-    "lab": "google",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "high"
-    ],
-    "in_price": 0.3,
-    "out_price": 2.5
-  },
-  {
-    "id": "google/gemini-3-flash",
-    "name": "Gemini 3 Flash",
-    "lab": "google",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.75,
-    "out_price": 3.75
-  },
-  {
-    "id": "google/gemini-2.5-pro",
-    "name": "Gemini 2.5 Pro",
-    "lab": "google",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high"
-    ],
-    "in_price": 1.25,
-    "out_price": 10
-  },
-  {
-    "id": "x-ai/grok-4.5",
-    "name": "Grok 4.5",
-    "lab": "grok",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 500000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ],
-    "in_price": 1.3,
-    "out_price": 3.9
-  },
-  {
-    "id": "x-ai/grok-4.7",
-    "name": "Grok 4.7",
-    "lab": "grok",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 500000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ],
-    "in_price": 2,
-    "out_price": 6
-  },
-  {
-    "id": "x-ai/grok-4.6",
-    "name": "Grok 4.6",
-    "lab": "grok",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 500000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ],
-    "in_price": 2,
-    "out_price": 6
-  },
-  {
-    "id": "moonshotai/kimi-k2.8-preview-agent",
-    "name": "Kimi K2.8 Preview Agent",
-    "lab": "kimi",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 262144,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "none",
-      "low",
-      "medium",
-      "high",
-      "max"
-    ],
-    "in_price": 1,
-    "out_price": 4
-  },
-  {
-    "id": "moonshotai/kimi-k3-agent",
-    "name": "Kimi K3 Agent",
-    "lab": "kimi",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 262144,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "none",
-      "low",
-      "medium",
-      "high",
-      "max"
-    ],
-    "in_price": 3,
-    "out_price": 15
-  },
-  {
-    "id": "xiaomi/mimo-v2.5",
-    "name": "MiMo v2.5",
-    "lab": "mimo",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1050000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.14,
-    "out_price": 0.28
-  },
-  {
-    "id": "xiaomi/mimo-v2.6-pro",
-    "name": "MiMo v2.6 Pro",
-    "lab": "mimo",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1048576,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.435,
-    "out_price": 0.87
-  },
-  {
-    "id": "xiaomi/mimo-v2.6-flash",
-    "name": "MiMo v2.6 Flash",
-    "lab": "mimo",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1048576,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.14,
-    "out_price": 0.28
-  },
-  {
-    "id": "minimax/minimax-m3",
-    "name": "MiniMax M3",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "adaptive",
-      "disabled"
-    ],
-    "in_price": 0.3,
-    "out_price": 1.2
-  },
-  {
-    "id": "minimax/minimax-m2.7",
-    "name": "MiniMax M2.7",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 204800,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.3,
-    "out_price": 1.2
-  },
-  {
-    "id": "minimax/minimax-m2.7-highspeed",
-    "name": "MiniMax M2.7 Highspeed",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 204800,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.6,
-    "out_price": 2.4
-  },
-  {
-    "id": "minimax/minimax-m2.5",
-    "name": "MiniMax M2.5",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 204800,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.3,
-    "out_price": 1.2
-  },
-  {
-    "id": "minimax/minimax-m2.1",
-    "name": "MiniMax M2.1",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 204800,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.3,
-    "out_price": 1.2
-  },
-  {
-    "id": "minimax/minimax-m2.5-highspeed",
-    "name": "MiniMax M2.5 Highspeed",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 204800,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.6,
-    "out_price": 2.4
-  },
-  {
-    "id": "minimax/minimax-m2.1-highspeed",
-    "name": "MiniMax M2.1 Highspeed",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 204800,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.6,
-    "out_price": 2.4
-  },
-  {
-    "id": "minimax/minimax-m2",
-    "name": "MiniMax M2",
-    "lab": "minimax",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 204800,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.3,
-    "out_price": 1.2
+    "efforts": []
   },
   {
     "id": "mistralai/mistral-large-4-0",
     "name": "Mistral Large 4",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 524288,
     "max_out": 65536,
@@ -1130,48 +247,36 @@ export const MODELS: CatalogModel[] = [
     "efforts": [
       "none",
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "mistralai/ministral-14b",
     "name": "Ministral 3 14B",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 8192,
     "vision": true,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "mistralai/mistral-large-2512",
     "name": "Mistral Large 3",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 16384,
     "vision": true,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "mistralai/mistral-medium-3.5",
     "name": "Mistral Medium 3.5",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 65536,
@@ -1181,16 +286,12 @@ export const MODELS: CatalogModel[] = [
     "efforts": [
       "none",
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "mistralai/mistral-small-2603",
     "name": "Mistral Small 4",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 65536,
@@ -1200,690 +301,312 @@ export const MODELS: CatalogModel[] = [
     "efforts": [
       "none",
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "mistralai/devstral-medium",
     "name": "Devstral 2",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 16384,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "mistralai/codestral-2508",
     "name": "Codestral",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 16384,
     "vision": false,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "mistralai/ministral-8b",
     "name": "Ministral 3 8B",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 256000,
     "max_out": 8192,
     "vision": true,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "mistralai/ministral-3b",
     "name": "Ministral 3 3B",
     "lab": "mistral",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 128000,
     "max_out": 8192,
     "vision": true,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
-  },
-  {
-    "id": "nvidia/nemotron-3-super",
-    "name": "Nemotron 3 Super",
-    "lab": "nvidia",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "off",
-      "on"
-    ],
-    "in_price": 0.08,
-    "out_price": 0.45
-  },
-  {
-    "id": "nvidia/nemotron-3-ultra",
-    "name": "Nemotron 3 Ultra",
-    "lab": "nvidia",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "off",
-      "on"
-    ],
-    "in_price": 0.6,
-    "out_price": 2.4
-  },
-  {
-    "id": "nvidia/nemotron-3-nano-omni",
-    "name": "Nemotron 3 Nano Omni",
-    "lab": "nvidia",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 256000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "off",
-      "on"
-    ],
-    "in_price": 0.05,
-    "out_price": 0.2
-  },
-  {
-    "id": "openai/gpt-6.1-sol",
-    "name": "GPT-6.1 Sol",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1050000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 2,
-    "out_price": 10
-  },
-  {
-    "id": "openai/gpt-6-astra",
-    "name": "GPT-6 Astra",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1050000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 10,
-    "out_price": 50
-  },
-  {
-    "id": "openai/gpt-6-sol",
-    "name": "GPT-6 Sol",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1050000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 2,
-    "out_price": 10
-  },
-  {
-    "id": "openai/gpt-6-luna",
-    "name": "GPT-6 Luna",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1050000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 0.1,
-    "out_price": 0.5
-  },
-  {
-    "id": "openai/gpt-5.6-terra",
-    "name": "GPT-5.6 Terra",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 1,
-    "out_price": 6
-  },
-  {
-    "id": "openai/gpt-5.6-luna",
-    "name": "GPT-5.6 Luna",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 0.1,
-    "out_price": 0.6
-  },
-  {
-    "id": "openai/gpt-5.5",
-    "name": "GPT-5.5",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ],
-    "in_price": 5,
-    "out_price": 30
-  },
-  {
-    "id": "openai/gpt-5.4",
-    "name": "GPT-5.4",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ],
-    "in_price": 2.5,
-    "out_price": 15
-  },
-  {
-    "id": "openai/gpt-5.6-sol",
-    "name": "GPT-5.6 Sol",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1000000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    "in_price": 2,
-    "out_price": 10
-  },
-  {
-    "id": "openai/gpt-5.4-mini",
-    "name": "GPT-5.4 Mini",
-    "lab": "openai",
-    "tier": "paid",
-    "free": false,
-    "modality": "chat",
-    "ctx": 400000,
-    "max_out": 65536,
-    "vision": true,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ],
-    "in_price": 0.75,
-    "out_price": 4.5
+    "efforts": []
   },
   {
     "id": "meituan/longcat-2.0",
     "name": "LongCat 2.0",
     "lab": "opencode-zen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1048576,
     "max_out": 65536,
     "vision": false,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "meituan/longcat-2.5-preview:free",
     "name": "LongCat 2.5 Preview (Free)",
     "lab": "opencode-zen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": false,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3-coder-plus:free",
     "name": "Qwen3 Coder Plus (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1048576,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.6-plus:free",
     "name": "Qwen3.6 Plus (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.7-max:free",
     "name": "Qwen3.7 Max (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": false,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.7-plus:free",
     "name": "Qwen3.7 Plus (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.8-max:free",
     "name": "Qwen3.8 Max (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.8-omni-flash:free",
     "name": "Qwen3.8 Omni Flash (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.7-flash:free",
     "name": "Qwen3.7 Flash (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.5-plus:free",
     "name": "Qwen3.5 Plus (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.5-flash:free",
     "name": "Qwen3.5 Flash (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3-vl-plus:free",
     "name": "Qwen3 VL Plus (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3-omni-flash:free",
     "name": "Qwen3 Omni Flash (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.5-omni-flash:free",
     "name": "Qwen3.5 Omni Flash (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.6-max-preview:free",
     "name": "Qwen3.6 Max Preview (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": false,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.6-27b:free",
     "name": "Qwen3.6 27B (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.5-omni-plus:free",
     "name": "Qwen3.5 Omni Plus (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": false,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.6-35b-a3b:free",
     "name": "Qwen3.6 35B A3B (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3.5-397b-a17b:free",
     "name": "Qwen3.5 397B A17B (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen3-max:free",
     "name": "Qwen3 Max (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 262144,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "qwen/qwen-plus-2025-07-28:free",
     "name": "Qwen Plus 0728 (Free)",
     "lab": "qwen",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 131072,
     "max_out": 65536,
     "vision": true,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
+    "efforts": []
   },
   {
     "id": "stealth/space-bunny-alpha:free",
     "name": "Space Bunny Alpha (Free)",
     "lab": "stealth",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 1000000,
     "max_out": 65536,
@@ -1892,77 +615,25 @@ export const MODELS: CatalogModel[] = [
     "reasoning": true,
     "efforts": [
       "high"
-    ],
-    "in_price": 0,
-    "out_price": 0
+    ]
   },
   {
     "id": "stealth/big-pickle",
     "name": "Big Pickle (Free)",
     "lab": "stealth",
-    "tier": "free",
-    "free": true,
     "modality": "chat",
     "ctx": 200000,
     "max_out": 65536,
     "vision": false,
     "tools": true,
     "reasoning": true,
-    "efforts": [],
-    "in_price": 0,
-    "out_price": 0
-  },
-  {
-    "id": "tencent/hy4-preview",
-    "name": "Hy4 Preview",
-    "lab": "tencent",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 1048576,
-    "max_out": 64000,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.834,
-    "out_price": 2.501
-  },
-  {
-    "id": "tencent/hy3-preview",
-    "name": "Hy3 Preview",
-    "lab": "tencent",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 192000,
-    "max_out": 64000,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.18,
-    "out_price": 0.6
-  },
-  {
-    "id": "tencent/hy3",
-    "name": "Hy3",
-    "lab": "tencent",
-    "tier": "premium",
-    "free": false,
-    "modality": "chat",
-    "ctx": 192000,
-    "max_out": 64000,
-    "vision": false,
-    "tools": true,
-    "reasoning": true,
-    "efforts": [],
-    "in_price": 0.132,
-    "out_price": 0.528
+    "efforts": []
   }
 ];
 
-export const LABS = ["anthropic", "api", "deepseek", "google", "grok", "kimi", "mimo", "minimax", "mistral", "nvidia", "openai", "opencode-zen", "qwen", "stealth", "tencent"];
+export const LABS = ["api","mistral","opencode-zen","qwen","stealth"];
+
+export const FREE_COUNT = 49;
 
 export function fmtCtx(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(".0", "")}M`;

@@ -13,7 +13,7 @@ import {
   useSearchShortcut,
 } from "@/components/custom/squid-app";
 import { CATEGORIES } from "@/lib/a0";
-import { MODELS, LABS, fmtCtx, type CatalogModel } from "@/lib/catalog";
+import { MODELS, LABS, FREE_COUNT, fmtCtx, type CatalogModel } from "@/lib/catalog";
 import { laneLabel } from "@/lib/lane-label";
 import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
 
@@ -24,7 +24,7 @@ const POOL_META: Record<
 > = {
   "a0/flagship": {
     chips: ["1M ctx", "tools", "general"],
-    blurb: "Go-to pool for everyday work — the strongest available round-trip.",
+    blurb: "Go-to pool for everyday work — the strongest usable free round-trip.",
     pick: (m) => m.ctx >= 128_000 && m.tools,
   },
   "a0/reasoning": {
@@ -44,8 +44,8 @@ const POOL_META: Record<
   },
   "a0/fast": {
     chips: ["low latency", "drafting"],
-    blurb: "Snappiest available lanes for chat styled drafts.",
-    pick: (m) => m.free && m.ctx >= 32_000,
+    blurb: "Snappiest free lanes for chat and drafts.",
+    pick: (m) => m.ctx >= 32_000,
   },
   "a0/omni": {
     chips: ["text + image", "omni"],
@@ -122,23 +122,14 @@ function CapChips({ m, compact }: { m: CatalogModel; compact?: boolean }) {
           {fmtCtx(m.ctx)} ctx
         </Pill>
       )}
-      {m.free ? (
-        <Pill tone="ok">free</Pill>
-      ) : (
-        <Pill tone="warn" title={`$${m.in_price} in / $${m.out_price} out per 1M tokens`}>
-          {m.tier === "premium" ? "premium" : "$"}
-        </Pill>
-      )}
     </span>
   );
 }
 
 type View = "pools" | "catalog";
-type TierFilter = "free" | "all";
 
 export default function Models() {
   const [view, setView] = useHashState<View>("view", "pools", ["pools", "catalog"]);
-  const [tier, setTier] = useHashState<TierFilter>("tier", "free", ["free", "all"]);
   const [lab, setLab] = useHashState<string>("lab", "all");
   const [q, setQ] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -166,27 +157,24 @@ export default function Models() {
     const ql = q.trim().toLowerCase();
     return MODELS.filter(
       (m) =>
-        (tier === "all" || m.free) &&
         (lab === "all" || m.lab === lab) &&
         (!ql || m.id.toLowerCase().includes(ql) || m.name.toLowerCase().includes(ql) || m.lab.includes(ql)),
     );
-  }, [q, tier, lab]);
-
-  const freeCount = MODELS.filter((m) => m.free).length;
+  }, [q, lab]);
 
   return (
     <div>
       <PageHead
         eyebrow="a0 / models"
         title="Models"
-        desc={`${MODELS.length} models reachable · ${freeCount} free-tier. Resolver picks per request, failover is silent.`}
+        desc={`${FREE_COUNT} free models reachable. Resolver picks per request, failover is silent — you never see the machinery.`}
         actions={
           <Seg<View>
             value={view}
             onChange={setView}
             options={[
               { value: "pools", label: "Pools" },
-              { value: "catalog", label: `Catalog · ${MODELS.length}` },
+              { value: "catalog", label: `Catalog · ${FREE_COUNT}` },
             ]}
           />
         }
@@ -211,7 +199,7 @@ export default function Models() {
         <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
           {CATEGORIES.map((c) => {
             const meta = POOL_META[c.id]!;
-            const picks = MODELS.filter((m) => m.free && meta.pick(m)).slice(0, 3);
+            const picks = MODELS.filter((m) => meta.pick(m)).slice(0, 3);
             return (
               <Panel key={c.id} flush className="pool-card">
                 <div style={{ padding: "18px 18px 14px" }}>
@@ -265,20 +253,12 @@ export default function Models() {
               <input
                 ref={searchRef}
                 className="sa-input"
-                placeholder="Search models…  (press /)"
+                placeholder="Search free models…  (press /)"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 aria-label="Search models"
               />
             </div>
-            <Seg<TierFilter>
-              value={tier}
-              onChange={setTier}
-              options={[
-                { value: "free", label: `Free · ${freeCount}` },
-                { value: "all", label: "All" },
-              ]}
-            />
           </div>
 
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 20 }}>
@@ -299,7 +279,7 @@ export default function Models() {
           </div>
 
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))" }}>
-            {models.slice(0, 60).map((m) => (
+            {models.map((m) => (
               <Panel key={m.id} flush>
                 <div style={{ display: "flex", gap: 11, padding: "13px 14px", alignItems: "center" }}>
                   <LabMark lab={m.lab} />
@@ -330,19 +310,14 @@ export default function Models() {
               <Empty
                 icon={<Ico.Search size={16} />}
                 title="No models match"
-                body="Loosen the lab or tier filter, or clear the search."
+                body="Loosen the lab filter, or clear the search."
                 action={
-                  <button type="button" className={btn("default", "sm")} onClick={() => { setQ(""); setLab("all"); setTier("free"); }}>
+                  <button type="button" className={btn("default", "sm")} onClick={() => { setQ(""); setLab("all"); }}>
                     Reset filters
                   </button>
                 }
               />
             </Panel>
-          )}
-          {models.length > 60 && (
-            <p className="sa-hint" style={{ textAlign: "center", marginTop: 14 }}>
-              showing 60 of {models.length} — narrow with a lab filter
-            </p>
           )}
         </>
       )}

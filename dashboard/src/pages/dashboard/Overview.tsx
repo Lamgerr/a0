@@ -7,13 +7,16 @@ import {
   Stat,
   Stats,
   Pill,
-  Note,
+  Dot,
   CodeBlock,
+  CopyLine,
   btn,
   Ico,
   SecHead,
+  Note,
 } from "@/components/custom/squid-app";
 import { CATEGORIES, A0_BASE_URL } from "@/lib/a0";
+import { FREE_COUNT, fmtCtx, MODELS } from "@/lib/catalog";
 import { listVirtualKeys } from "@/hooks/use-api-keys";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, hasSupabaseEnv } from "@/integrations/supabase/client";
@@ -32,6 +35,23 @@ r = client.chat.completions.create(
 )
 
 print(r.choices[0].message.content)`;
+
+/* category → what a caller can rely on, computed from the live free catalog */
+const POOL_CHIPS: Record<string, (m: typeof MODELS[number]) => boolean> = {
+  "a0/flagship": (m) => m.ctx >= 128_000 && m.tools,
+  "a0/reasoning": (m) => m.reasoning,
+  "a0/coder": (m) => m.tools,
+  "a0/vision": (m) => m.vision,
+  "a0/fast": (m) => m.ctx >= 32_000,
+  "a0/omni": (m) => m.vision,
+  "a0/long": (m) => m.ctx >= 500_000,
+};
+
+function poolStats(id: string) {
+  const picks = MODELS.filter((m) => POOL_CHIPS[id]?.(m) ?? false);
+  const topCtx = picks.reduce((a, m) => Math.max(a, m.ctx), 0);
+  return { count: picks.length, topCtx };
+}
 
 export default function Overview() {
   const { controlPlaneConfigured } = useAuth();
@@ -54,11 +74,11 @@ export default function Overview() {
       <PageHead
         eyebrow="a0 / console"
         title="Overview"
-        desc="Gateway posture at a glance — keys, wings, and the free pool."
+        desc="Keys, wings and the free pool — one screen."
         actions={
           <>
-            <Link to="/dashboard/nodes" className={btn("default", "sm")}>
-              Attach a wing
+            <Link to="/dashboard/guide" className={btn("default", "sm")}>
+              <Ico.ArrowUpRight size={13} /> Wire it up
             </Link>
             <Link to="/dashboard/keys" className={btn("primary", "sm")}>
               New key <Ico.Arrow size={13} />
@@ -70,25 +90,37 @@ export default function Overview() {
       <Stats>
         <Stat
           label="Active keys"
-          value={activeKeys.length}
-          sub={controlPlaneConfigured ? "hashed · shown once · 60s edge cache" : "demo store"}
+          value={controlPlaneConfigured ? activeKeys.length : "—"}
+          sub={controlPlaneConfigured ? "hashed · 60s edge cache" : "demo store"}
         />
         <Stat
           label="Wings online"
           value={controlPlaneConfigured ? online.length : "—"}
-          sub={
-            controlPlaneConfigured
-              ? `${nodesList.length} attached · heartbeat 30s`
-              : "control plane offline"
-          }
+          sub={controlPlaneConfigured ? `${nodesList.length} attached · heartbeat 30s` : "control plane offline"}
         />
-        <Stat
-          label="Endpoint"
-          value={<span className="sa-num">{A0_BASE_URL}</span>}
-          sub="OpenAI-compatible · /v1/chat/completions"
-        />
-        <Stat label="Free pool" value="4 lanes" sub="tiered failover · resolved per request" />
+        <Stat label="Free models" value={FREE_COUNT} sub="5 labs · resolver picks per request" />
+        <Stat label="Failover" value="silent" sub="tiered lanes, no user-visible retries" />
       </Stats>
+
+      {/* endpoint hero */}
+      <div style={{ marginTop: 20 }}>
+        <Panel flush className="endpoint-hero">
+          <div style={{ padding: "18px 20px 16px" }}>
+            <div className="lg-text-label" style={{ marginBottom: 10 }}>
+              your endpoint — OpenAI-compatible
+            </div>
+            <CopyLine
+              value={`${A0_BASE_URL}/v1`}
+              display={`${A0_BASE_URL}/v1`}
+            />
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 12 }}>
+              <Pill>/v1/chat/completions</Pill>
+              <Pill>GET /v1/models</Pill>
+              <Pill>7 categories</Pill>
+            </div>
+          </div>
+        </Panel>
+      </div>
 
       {!controlPlaneConfigured && (
         <div style={{ marginTop: 16 }}>
@@ -99,27 +131,98 @@ export default function Overview() {
         </div>
       )}
 
-      <div style={{ marginTop: 24 }}>
+      {/* categories — glanceable cards */}
+      <div style={{ marginTop: 28 }}>
+        <SecHead
+          title="The categories are the product"
+          desc="Request a category — a0 resolves the best usable free model at request time."
+        />
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+          {CATEGORIES.map((c) => {
+            const { count, topCtx } = poolStats(c.id);
+            return (
+              <Panel key={c.id} flush>
+                <div style={{ padding: "15px 16px 13px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <code className="sa-mono" style={{ font: "500 14.5px/1 var(--sa-mono)", color: "var(--sa-text)" }}>
+                      {c.id}
+                    </code>
+                    <Pill title="capable free models in this pool">{count}</Pill>
+                  </div>
+                  <p style={{ margin: "8px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--sa-text-2)" }}>
+                    {c.desc}
+                  </p>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 11 }}>
+                    {topCtx > 0 && <Pill>up to {fmtCtx(topCtx)} ctx</Pill>}
+                    {c.id === "a0/coder" && <Pill>tool calling</Pill>}
+                    {(c.id === "a0/vision" || c.id === "a0/omni") && <Pill>image-in</Pill>}
+                    {c.id === "a0/reasoning" && <Pill>deep thinking</Pill>}
+                    {c.id === "a0/fast" && <Pill>low latency</Pill>}
+                  </div>
+                </div>
+              </Panel>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* quick start */}
+      <div style={{ marginTop: 28 }}>
         <Panel title="Quick start" desc="Any OpenAI SDK or framework — point it at a wing." flush>
           <div style={{ padding: 16 }}>
             <CodeBlock code={QUICK_START} lang="python" wrap />
           </div>
+          <div style={{ padding: "0 16px 16px" }}>
+            <Row
+              label="Wire a0 anywhere"
+              desc="Full recipes, env vars and a copy-paste AI prompt on the Guide page."
+              children={
+                <Link to="/dashboard/guide" className={btn("ghost", "sm")}>
+                  Guide <Ico.Arrow size={12} />
+                </Link>
+              }
+            />
+          </div>
         </Panel>
       </div>
 
-      <SecHead
-        title="The categories are the product"
-        desc="Request a category — the chain resolves to the best usable free model at request time."
-      />
-      <Panel flush>
-        {CATEGORIES.map((c) => (
+      {/* posture glance */}
+      <div style={{ marginTop: 24 }}>
+        <Panel title="Posture" flush>
           <Row
-            key={c.id}
-            label={<code className="sa-mono">{c.id}</code>}
-            desc={c.desc}
+            label={
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                <Dot tone={controlPlaneConfigured ? "ok" : "neutral"} pulse={controlPlaneConfigured} />
+                Wings
+              </span>
+            }
+            desc={controlPlaneConfigured ? `${online.length} of ${nodesList.length} online` : "—"}
+            children={
+              <Link to="/dashboard/nodes" className={btn("ghost", "sm")}>
+                Manage <Ico.Arrow size={12} />
+              </Link>
+            }
           />
-        ))}
-      </Panel>
+          <Row
+            label="Keys"
+            desc={controlPlaneConfigured ? `${activeKeys.length} active` : "—"}
+            children={
+              <Link to="/dashboard/keys" className={btn("ghost", "sm")}>
+                Manage <Ico.Arrow size={12} />
+              </Link>
+            }
+          />
+          <Row
+            label="Traffic"
+            desc="requests, tokens, lanes"
+            children={
+              <Link to="/dashboard/usage" className={btn("ghost", "sm")}>
+                Usage <Ico.Arrow size={12} />
+              </Link>
+            }
+          />
+        </Panel>
+      </div>
     </div>
   );
 }

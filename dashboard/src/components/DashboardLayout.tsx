@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppShell, TopBar, Ico, btn } from "@/components/custom/squid-app";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -16,22 +16,33 @@ const NAV = [
   { to: "/dashboard/keys", label: "API Keys" },
   { to: "/dashboard/models", label: "Models" },
   { to: "/dashboard/nodes", label: "Nodes" },
+  { to: "/dashboard/guide", label: "Guide" },
 ];
 
 /* One underline-nav row under the top bar; overrides keep sa-tab visuals
-   for router Links (aria-selected lives on buttons, not links). */
+   for router Links. Active state is stamped on via !important so nothing
+   later in the cascade (assembly CSS, shell resets) can mute it. */
 const SHELL_CSS = `
  .sa-tabs-wrap { max-width: 1120px; margin: 0 auto; padding: 0 var(--sa-gut); }
- html.sq-app-root .sa-tab.is-active { color: var(--sa-text) !important; border-bottom-color: var(--sa-text) !important; }
+ a.sa-tab { -webkit-tap-highlight-color: transparent; }
+ a.sa-tab.is-active { color: var(--sa-text) !important; border-bottom-color: var(--sa-text) !important; }
  .sa-tabs::-webkit-scrollbar { display: none; }
  .sa-tabs { scrollbar-width: none; }
 .sa-avatar { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; background: var(--sa-bg-4); color: var(--sa-text); font: 500 10px/1 var(--sa-mono); }
 .sa-demo-note { display: flex; align-items: center; gap: 8px; padding: 8px var(--sa-gut); color: var(--sa-warn); font-size: 12px; background: color-mix(in srgb, var(--sa-warn) 7%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--sa-warn) 25%, var(--sa-line)); }
 `;
 
+/* Deterministic active-tab match: exact hit for `end` entries, prefix hit
+   elsewhere. Never relies on runtime router internals. */
+function tabActive(pathname: string, to: string, end?: boolean): boolean {
+  if (pathname === to) return true;
+  return !end && pathname.startsWith(to + "/");
+}
+
 export default function DashboardLayout() {
   const { user, signOut, controlPlaneConfigured } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const initial = (user?.email?.[0] ?? "d").toUpperCase();
 
   return (
@@ -73,14 +84,14 @@ export default function DashboardLayout() {
       <nav className="sa-tabs-wrap">
         <div className="sa-tabs" aria-label="Console sections">
           {NAV.map(({ to, label, end }) => (
-            <NavLink
+            <Link
               key={to}
               to={to}
-              end={end}
-              className={({ isActive }) => `sa-tab${isActive ? " is-active" : ""}`}
+              aria-current={tabActive(pathname, to, end) ? "page" : undefined}
+              className={`sa-tab${tabActive(pathname, to, end) ? " is-active" : ""}`}
             >
               {label}
-            </NavLink>
+            </Link>
           ))}
         </div>
       </nav>

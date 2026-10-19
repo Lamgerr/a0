@@ -11,6 +11,7 @@ import Keys from "@/pages/dashboard/Keys";
 import Usage from "@/pages/dashboard/Usage";
 import Models from "@/pages/dashboard/Models";
 import Nodes from "@/pages/dashboard/Nodes";
+import Guide from "@/pages/dashboard/Guide";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ export default function App() {
               <Route path="/dashboard/usage" element={<Usage />} />
               <Route path="/dashboard/models" element={<Models />} />
               <Route path="/dashboard/nodes" element={<Nodes />} />
+              <Route path="/dashboard/guide" element={<Guide />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
