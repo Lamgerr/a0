@@ -21,8 +21,10 @@ const NAV = [
 /* One underline-nav row under the top bar; overrides keep sa-tab visuals
    for router Links (aria-selected lives on buttons, not links). */
 const SHELL_CSS = `
-.sa-tabs-wrap { max-width: 1120px; margin: 0 auto; padding: 0 var(--sa-gut); }
-.sa-tab.is-active { color: var(--sa-text); border-bottom-color: var(--sa-text); }
+ .sa-tabs-wrap { max-width: 1120px; margin: 0 auto; padding: 0 var(--sa-gut); }
+ html.sq-app-root .sa-tab.is-active { color: var(--sa-text) !important; border-bottom-color: var(--sa-text) !important; }
+ .sa-tabs::-webkit-scrollbar { display: none; }
+ .sa-tabs { scrollbar-width: none; }
 .sa-avatar { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; background: var(--sa-bg-4); color: var(--sa-text); font: 500 10px/1 var(--sa-mono); }
 .sa-demo-note { display: flex; align-items: center; gap: 8px; padding: 8px var(--sa-gut); color: var(--sa-warn); font-size: 12px; background: color-mix(in srgb, var(--sa-warn) 7%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--sa-warn) 25%, var(--sa-line)); }
 `;

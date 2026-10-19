@@ -111,7 +111,7 @@ export default function Index() {
           <span>·</span>
           <span>7 categories</span>
           <span>·</span>
-          <span>3-lane failover</span>
+          <span>4-lane failover</span>
           <span>·</span>
           <span>free tier ~20 RPM</span>
         </div>

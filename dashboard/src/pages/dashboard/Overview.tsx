@@ -87,7 +87,7 @@ export default function Overview() {
           value={<span className="sa-num">{A0_BASE_URL}</span>}
           sub="OpenAI-compatible · /v1/chat/completions"
         />
-        <Stat label="Free pool" value="3 lanes" sub="xkiro · llm7 · openrouter" />
+        <Stat label="Free pool" value="4 lanes" sub="tiered failover · resolved per request" />
       </Stats>
 
       {!controlPlaneConfigured && (

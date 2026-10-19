@@ -22,6 +22,7 @@ import {
   useHashState,
 } from "@/components/custom/squid-app";
 import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
+import { laneLabel } from "@/lib/lane-label";
 
 interface UsageRow {
   ts: string;
@@ -276,7 +277,7 @@ export default function Usage() {
                       return (
                         <tr key={lane}>
                           <td className="k">
-                            <Pill tone="solid">{lane}</Pill>
+                            <Pill tone="solid">{laneLabel(lane)}</Pill>
                           </td>
                           <td className="sa-num">{l.reqs.toLocaleString()}</td>
                           <td className="sa-num">{fmtK(l.tokens)}</td>

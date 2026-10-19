@@ -10,6 +10,14 @@
   ],
   "rewrites": [
     {
+      "source": "/v1/:path*",
+      "destination": "https://5u8u72wjv2.apps.bot-hosting.cloud/v1/:path*"
+    },
+    {
+      "source": "/healthz",
+      "destination": "https://5u8u72wjv2.apps.bot-hosting.cloud/healthz"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
