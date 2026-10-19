@@ -18,6 +18,7 @@ import (
 	"github.com/NaveenSingh9999/a0/internal/node"
 	"github.com/NaveenSingh9999/a0/internal/relay"
 	"github.com/NaveenSingh9999/a0/internal/server"
+	"github.com/NaveenSingh9999/a0/internal/status"
 )
 
 func main() {
@@ -91,6 +92,7 @@ func main() {
 	go func() {
 		log.Printf("a0 wing up — mode=%s lanes=%d port=%s (node=%s wired=%v)",
 			mode, len(lanes), port, nodeID, wired)
+	status.Boot(mode + "@" + port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %v", err)
 		}
@@ -178,6 +180,10 @@ func (p publicGate) StreamOpen(keyID string) (int, int) {
 
 func (p publicGate) StreamDone(keyID string) { p.gr.StreamClose(keyID) }
 
+// Stats surfaces control-plane liveness for /healthz (server probes this
+// optional interface).
+func (p publicGate) Stats() map[string]any { return status.Snapshot() }
+
 // envInt parses an int env knob; bad/missing values fall back to def.
 func envInt(k string, def int) int {
 	v := strings.TrimSpace(os.Getenv(k))
@@ -242,7 +248,10 @@ func runControlPlane(ctx context.Context, nc *node.Client, lanes []*lane.Lane, r
 		}
 		if err := nc.Heartbeat(ctx, h); err != nil {
 			log.Printf("heartbeat failed (continuing): %v", err)
+			status.Heartbeat(false)
+			return
 		}
+		status.Heartbeat(true)
 	}
 	beat()
 	go func() {
@@ -267,7 +276,10 @@ func runControlPlane(ctx context.Context, nc *node.Client, lanes []*lane.Lane, r
 				case <-ticker.C:
 					if err := recorder.Flush(ctx, nc); err != nil {
 						log.Printf("usage flush failed (buffer retained): %v", err)
+						status.UsageFlush()
+						continue
 					}
+					status.UsageFlush()
 				case <-ctx.Done():
 					return
 				}
@@ -288,10 +300,13 @@ func runControlPlane(ctx context.Context, nc *node.Client, lanes []*lane.Lane, r
 						case st := <-strikes:
 							drained++
 							sctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-							if err := nc.Strike(sctx, st); err != nil {
-								log.Printf("strike report failed kind=%s: %v", st.Kind, err)
-							}
+							err := nc.Strike(sctx, st)
 							cancel()
+							if err != nil {
+								log.Printf("strike report failed kind=%s: %v", st.Kind, err)
+								continue
+							}
+							status.StrikeSent()
 							if drained >= 50 {
 								s = false
 							}
