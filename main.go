@@ -128,6 +128,12 @@ func (p publicGate) mapKey(k node.Key, ok bool) (server.KeyInfo, bool) {
 		return server.KeyInfo{ID: k.KeyID, HTTP: http.StatusForbidden,
 			Reason: "key banned for fair-use abuse"}, true
 	}
+	if k.Status == "held" {
+		// authoritative control-plane hold; expiry is released by
+		// key_validate, picked up on the next 60s cache refresh
+		return server.KeyInfo{ID: k.KeyID, HTTP: http.StatusForbidden,
+			Reason: "key held for fair use — try again later"}, true
+	}
 	return server.KeyInfo{
 		ID: k.KeyID, RPM: k.RPM, DayCap: k.DailyCap, DayCount: k.DayCount,
 	}, true
