@@ -44,6 +44,16 @@ func TestResolveCoderLeadsWithXKiro(t *testing.T) {
 	}
 }
 
+func TestReasoningLeadsWithLLM7GLMFlash(t *testing.T) {
+	laneName, model, n := firstChainOf(t, "a0/reasoning")
+	if laneName != "llm7" || model != "GLM-5.3-Flash" {
+		t.Fatalf("a0/reasoning leads with %s@%s", laneName, model)
+	}
+	if n < 4 {
+		t.Fatalf("a0/reasoning chain pruned too far: %d", n)
+	}
+}
+
 func TestResolvePrunesAbsentLanes(t *testing.T) {
 	few := []*lane.Lane{{Name: "llm7", Model: "GLM-5.3-Flash"}}
 	chain, err := Resolve("a0/flagship", few)

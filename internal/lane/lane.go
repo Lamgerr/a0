@@ -48,6 +48,14 @@ func (l *Lane) HasKey() bool {
 	return l.Key != "" || len(l.Keys) > 0
 }
 
+// OptInPublic reports whether the lane card explicitly opts into public mode
+// (lex dex "public" flag). Keyless lanes are normally dropped in public mode
+// to conserve anonymous-jail quotas; an explicit opt-in overrides that — the
+// lane owner accepted the shared-jail cost.
+func (l *Lane) OptInPublic() bool {
+	return l.Public != nil && *l.Public
+}
+
 // builtin chain when no models.json exists: xkiro -> llm7 (keyless) -> openrouter.
 // API keys come from the environment at load time; nothing is hardcoded.
 func builtin() []*Lane {

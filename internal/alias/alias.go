@@ -25,15 +25,20 @@ var Categories = map[string][]string{
 		"xkiro@stealth/space-bunny-alpha:free",
 		"llm7@glm-5.3",
 		"openrouter@openrouter/free",
+		"kilo@nvidia/nemotron-3-ultra-550b-a55b:free",
+		"ovh@gpt-oss-120b",
 	},
 	"a0/reasoning": {
+		"llm7@GLM-5.3-Flash",
 		"xkiro@qwen/qwen3.8-max:free",
 		"xkiro@cohere/command-a-reasoning",
 		"xkiro@mistralai/mistral-large-4-0",
 		"xkiro@qwen/qwen3.6-max-preview:free",
 		"xkiro@stealth/big-pickle",
+		"kilo@nvidia/nemotron-3-ultra-550b-a55b:free",
+		"kilo2@nvidia/nemotron-3-ultra-550b-a55b:free",
+		"ovh@gpt-oss-120b",
 		"openrouter@nvidia/nemotron-3-ultra-550b-a55b:free",
-		"llm7@glm-5.3",
 	},
 	"a0/coder": {
 		"xkiro@qwen/qwen3-coder-plus:free",
@@ -42,6 +47,8 @@ var Categories = map[string][]string{
 		"xkiro@cohere/north-mini-code",
 		"xkiro@qwen/qwen3.8-max:free",
 		"llm7@deepseek-v4-pro",
+		"kilo@cohere/north-mini-code:free",
+		"kilo2@cohere/north-mini-code:free",
 		"openrouter@cohere/north-mini-code:free",
 		"gonka@deepseek-v4-flash-0731",
 	},
@@ -53,6 +60,9 @@ var Categories = map[string][]string{
 		"xkiro@qwen/qwen3-omni-flash:free",
 		"gemini-direct@gemini-3.8-flash",
 		"openrouter@nvidia/nemotron-3.5-super-vl:free",
+		"kilo@nvidia/nemotron-3.5-super-vl:free",
+		"kilo2@nvidia/nemotron-3.5-super-vl:free",
+		"ovh@Qwen2.5-VL-72B-Instruct",
 	},
 	"a0/fast": {
 		"xkiro@qwen/qwen3.7-flash:free",
@@ -63,6 +73,8 @@ var Categories = map[string][]string{
 		"groq@gpt-oss-120b",
 		"llm7@GLM-5.3-Flash",
 		"openrouter@openrouter/free",
+		"kilo@kilo-auto/free",
+		"ovh@gpt-oss-20b",
 	},
 	"a0/omni": {
 		"xkiro@qwen/qwen3.8-omni-flash:free",
@@ -71,6 +83,7 @@ var Categories = map[string][]string{
 		"xkiro@cohere/command-a-vision",
 		"xkiro@qwen/qwen3-vl-plus:free",
 		"openrouter@thinkingmachines/inkling:free",
+		"kilo@nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
 	},
 	"a0/long": {
 		"xkiro@qwen/qwen3-coder-plus:free",
@@ -80,6 +93,8 @@ var Categories = map[string][]string{
 		"xkiro@qwen/qwen3.7-flash:free",
 		"llm7@glm-5.3",
 		"openrouter@openrouter/free",
+		"kilo@poolside/laguna-s-2.1:free",
+		"ovh@gpt-oss-120b",
 	},
 }
 

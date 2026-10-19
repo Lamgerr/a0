@@ -209,11 +209,23 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 	w.Header().Set("X-A0-Lane", l.Name)
 	w.WriteHeader(resp.StatusCode)
 	flusher, _ := w.(http.Flusher)
+	var shim *reasonShim
+	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
+		// SSE only: alias upstream reasoning fields for thinking-pane clients.
+		// (Non-SSE bodies just proxy verbatim below.)
+		shim = newReasonShim(w)
+	}
 	buf := make([]byte, 4096)
 	for {
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
-			if _, werr := w.Write(buf[:n]); werr != nil {
+			var werr error
+			if shim != nil {
+				_, werr = shim.Write(buf[:n])
+			} else {
+				_, werr = w.Write(buf[:n])
+			}
+			if werr != nil {
 				return true, resp.StatusCode // client bailed; stop here quietly.
 			}
 			if flusher != nil {
@@ -221,12 +233,18 @@ func attempt(c lane.HTTPClient, w http.ResponseWriter, l *lane.Lane, model strin
 			}
 		}
 		if rerr == io.EOF {
+			if shim != nil {
+				shim.Close()
+			}
 			return true, resp.StatusCode
 		}
 		if rerr != nil {
 			// Upstream died mid-body. The 200 + partial bytes are already on
 			// the wire, so no further lane attempt or 502 append is possible:
 			// the chain considers itself done either way.
+			if shim != nil {
+				shim.Close()
+			}
 			l.CoolLane(defaultCool)
 			return true, resp.StatusCode
 		}

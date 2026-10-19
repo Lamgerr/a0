@@ -45,6 +45,19 @@ func TestModeGateKeylessLanes(t *testing.T) {
 	}
 }
 
+func TestModeGatePublicOptInLane(t *testing.T) {
+	yes := true
+	lanes := []*lane.Lane{
+		{Public: &yes},            // keyless, explicit opt-in — stays
+		{Name: "x", Key: "sk-xt"}, // keyed — stays
+		{},                        // keyless, no opt-in — dropped
+	}
+	got := filterForMode(lanes, "public")
+	if len(got) != 2 || got[0].Public != &yes {
+		t.Fatalf("public opt-in lane must stay: %+v", got)
+	}
+}
+
 func TestEnvDefaultsAndOverrides(t *testing.T) {
 	os.Unsetenv("A0_PORT")
 	if got := env("A0_PORT", "8082"); got != "8082" {

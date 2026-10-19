@@ -358,13 +358,15 @@ func parseEnvFile(path string) {
 // filterForMode gates keyless lanes: local (and unknown modes — the safe
 // default) keeps everything; "public" drops lanes with no credentials to
 // conserve anonymous-jail quotas, unless A0_EXPERIMENTAL=1 forces them in.
+// A lane card with an explicit "public": true opt-in stays regardless — the
+// lane owner accepted the shared-jail cost for its keyless quotas.
 func filterForMode(lanes []*lane.Lane, mode string) []*lane.Lane {
 	if mode != "public" || envTruthy("A0_EXPERIMENTAL") {
 		return lanes
 	}
 	out := lanes[:0:0]
 	for _, l := range lanes {
-		if l.HasKey() {
+		if l.HasKey() || l.OptInPublic() {
 			out = append(out, l)
 		}
 	}

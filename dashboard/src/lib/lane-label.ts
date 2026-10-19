@@ -6,6 +6,9 @@ const LANE_LABEL: Record<string, string> = {
   xkiro: "Tier 1",
   llm7: "Tier 2",
   openrouter: "Tier 3",
+  kilo: "Tier 4",
+  kilo2: "Tier 4",
+  ovh: "Tier 5",
   gonka: "Reserve",
 };
 
