@@ -54,7 +54,7 @@ type KeyGate interface {
 func New(r *relay.Relay, gate KeyGate) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, req *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "lanes": len(r.Lanes)})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "lanes": len(r.Lanes), "build": "fairuse-1"})
 	})
 	mux.HandleFunc("GET /v1/models", func(w http.ResponseWriter, req *http.Request) {
 		if gate != nil {
