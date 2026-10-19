@@ -26,11 +26,15 @@ export interface Database {
           revoked: boolean;
           created_at: string;
           last_used_at: string | null;
+          status: string;
+          status_until: string | null;
+          strikes: number;
+          last_strike_at: string | null;
         };
         Insert: {
           id?: string;
           user_id: string;
-          name: string;
+          name?: string;
           key_hash: string;
           prefix: string;
           rpm?: number;
@@ -38,6 +42,10 @@ export interface Database {
           revoked?: boolean;
           created_at?: string;
           last_used_at?: string | null;
+          status?: string;
+          status_until?: string | null;
+          strikes?: number;
+          last_strike_at?: string | null;
         };
         Update: {
           name?: string;
@@ -46,6 +54,28 @@ export interface Database {
           revoked?: boolean;
           last_used_at?: string | null;
         };
+        Relationships: [];
+      };
+      abuse_events: {
+        Row: {
+          id: string;
+          ts: string;
+          virtual_key: string | null;
+          node: string | null;
+          abuse_kind: string;
+          ip: unknown;
+          detail: Json;
+        };
+        Insert: {
+          id?: string;
+          ts?: string;
+          virtual_key?: string | null;
+          node?: string | null;
+          abuse_kind: string;
+          ip?: unknown;
+          detail?: Json;
+        };
+        Update: { detail?: Json };
         Relationships: [];
       };
       usage_events: {
@@ -60,6 +90,7 @@ export interface Database {
           out_tok: number;
           status: number;
           latency_ms: number;
+          ip: unknown;
         };
         Insert: {
           id?: string;
@@ -72,6 +103,7 @@ export interface Database {
           out_tok?: number;
           status: number;
           latency_ms?: number;
+          ip?: unknown;
         };
         Update: { status?: number };
         Relationships: [];

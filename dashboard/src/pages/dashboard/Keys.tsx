@@ -88,6 +88,34 @@ export default function Keys() {
                   <tr key={k.id} style={k.revoked ? { opacity: 0.5 } : undefined}>
                     <td className="k">
                       {k.name}
+                      {k.status === "held" && (
+                        <span style={{ marginLeft: 8 }}>
+                          <Pill
+                            tone="warn"
+                            title={
+                              k.status_until
+                                ? `held for fair use until ${new Date(k.status_until).toLocaleTimeString()}`
+                                : "held for fair use"
+                            }
+                          >
+                            held
+                          </Pill>
+                        </span>
+                      )}
+                      {k.status === "banned" && (
+                        <span style={{ marginLeft: 8 }}>
+                          <Pill tone="err" title="banned — repeated fair-use abuse">
+                            banned
+                          </Pill>
+                        </span>
+                      )}
+                      {k.strikes > 0 && k.status === "active" && (
+                        <span style={{ marginLeft: 8 }}>
+                          <Pill title="fair-use strikes measured over rolling 24h">
+                            {k.strikes} strike{k.strikes > 1 ? "s" : ""}
+                          </Pill>
+                        </span>
+                      )}
                       {k.revoked && (
                         <span style={{ marginLeft: 8 }}>
                           <Pill title="revoked — a0 stops accepting it within 60s">

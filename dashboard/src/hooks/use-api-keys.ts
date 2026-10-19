@@ -28,6 +28,10 @@ export async function createVirtualKey(
       revoked: false,
       created_at: new Date().toISOString(),
       last_used_at: null,
+      status: "active",
+      status_until: null,
+      strikes: 0,
+      last_strike_at: null,
     });
     return { secret, error: null };
   }

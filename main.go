@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NaveenSingh9999/a0/internal/guard"
 	"github.com/NaveenSingh9999/a0/internal/lane"
 	"github.com/NaveenSingh9999/a0/internal/node"
 	"github.com/NaveenSingh9999/a0/internal/relay"
@@ -40,24 +41,47 @@ func main() {
 
 	var gate server.KeyGate
 	var recorder *node.Recorder
+	var gr *guard.Guard
+	strikes := make(chan node.Strike, 256)
+	var frames = func(k guard.Strike) {
+		select {
+		case strikes <- node.Strike{KeyID: k.KeyID, Kind: k.Kind, IP: k.IP}:
+		default: // buffer full — local enforcement still holds the line
+		}
+	}
 	if mode == "public" && ctl != nil {
-		gate = gateAdapter{node.NewGate(ctl, time.Minute)}
+		rg := node.NewGate(ctl, time.Minute)
+		gr = guard.New(guard.Cfg{
+			KeyRPM:      envInt("A0_KEY_RPM_DEF", 0),
+			KeyBurst:    envInt("A0_KEY_BURST", 0),
+			IPRPM:       envInt("A0_IP_RPM", 0),
+			IPBurst:     envInt("A0_IP_BURST", 0),
+			GlobalRPM:   envInt("A0_GLOBAL_RPM", 0),
+			TokenDay:    envInt("A0_TOKEN_DAY", 0),
+			MaxStreams:  envInt("A0_MAX_STREAMS", 0),
+			MaxIPPerKey: envInt("A0_MAX_IP_PER_KEY", 0),
+		}, frames)
+		gate = publicGate{rg: rg, gr: gr}
 		recorder = node.NewRecorder(256)
 	}
 
 	r := relay.New(nil, lanes)
-	if recorder != nil {
+	if recorder != nil && gr != nil {
 		r.Usage = func(e relay.UsageEvent) {
 			recorder.Append(node.Event{
 				KeyID: e.KeyID, Lane: e.Lane, Model: e.Model,
 				Status: e.Status, LatencyMs: e.LatencyMs,
+				InTok: e.InTok, OutTok: e.OutTok, IP: e.IP,
 			})
+			gr.Note(e.KeyID, e.Status, e.InTok, e.OutTok) // fair-use budget
 		}
 	}
 
 	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: server.New(r, gate),
+		Addr:              ":" + port,
+		Handler:           server.New(r, gate),
+		ReadHeaderTimeout: 30 * time.Second, // slowloris ceiling
+		IdleTimeout:       120 * time.Second,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -73,7 +97,7 @@ func main() {
 	}()
 
 	if ctl != nil {
-		runControlPlane(ctx, ctl, lanes, recorder)
+		runControlPlane(ctx, ctl, lanes, recorder, strikes)
 	}
 
 	<-stop
@@ -89,15 +113,79 @@ func env(k, def string) string {
 	return def
 }
 
-// gateAdapter adapts node.Gate's full verdict to the server's key-id gate.
-type gateAdapter struct{ g *node.Gate }
+// publicGate is the full public-mode facade over the control-plane verdict
+// cache (node.Gate) and the wing's fair-use core (guard.Guard).
+type publicGate struct {
+	rg *node.Gate
+	gr *guard.Guard
+}
 
-func (ga gateAdapter) Allow(key string) (string, bool) {
-	k, ok := ga.g.Allow(key)
+func (p publicGate) mapKey(k node.Key, ok bool) (server.KeyInfo, bool) {
 	if !ok {
-		return "", false
+		return server.KeyInfo{}, false
 	}
-	return k.KeyID, true
+	if k.Status == "banned" {
+		return server.KeyInfo{ID: k.KeyID, HTTP: http.StatusForbidden,
+			Reason: "key banned for fair-use abuse"}, true
+	}
+	return server.KeyInfo{
+		ID: k.KeyID, RPM: k.RPM, DayCap: k.DailyCap, DayCount: k.DayCount,
+	}, true
+}
+
+func (p publicGate) Allow(key, ip string) (server.KeyInfo, bool) {
+	k, ok := p.rg.Allow(key)
+	info, kept := p.mapKey(k, ok)
+	if !kept || info.HTTP != 0 {
+		return info, kept
+	}
+	// fair-use verdict on top of validity
+	v := p.gr.AdmitChat(info.ID, ip, guard.Policy{
+		KeyID: info.ID, RPM: info.RPM, DayCap: info.DayCap, DayCount: info.DayCount,
+	})
+	if v.Deny {
+		return server.KeyInfo{ID: info.ID, HTTP: v.HTTP, Reason: v.Reason, Retry: v.RetryAfter}, true
+	}
+	return info, true
+}
+
+func (p publicGate) Verify(key string) (server.KeyInfo, bool) {
+	k, ok := p.rg.Allow(key)
+	info, kept := p.mapKey(k, ok)
+	info.RPM, info.DayCap, info.DayCount = 0, 0, 0
+	return info, kept && info.HTTP == 0
+}
+
+func (p publicGate) Catalog(ip string) (int, int) {
+	if v := p.gr.AdmitModels(ip); v.Deny {
+		return v.HTTP, v.RetryAfter
+	}
+	return 0, 0
+}
+
+func (p publicGate) StreamOpen(keyID string) (int, int) {
+	if v := p.gr.StreamOpen(keyID); v.Deny {
+		return v.HTTP, v.RetryAfter
+	}
+	return 0, 0
+}
+
+func (p publicGate) StreamDone(keyID string) { p.gr.StreamClose(keyID) }
+
+// envInt parses an int env knob; bad/missing values fall back to def.
+func envInt(k string, def int) int {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return def
+	}
+	n := 0
+	for _, r := range v {
+		if r < '0' || r > '9' {
+			return def
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n
 }
 
 // envTruthy accepts 1/true/t/yes (case-insensitive).
@@ -132,9 +220,10 @@ func loadLanes(ctl *node.Client, nodeID, token string) []*lane.Lane {
 	return lanes
 }
 
-// runControlPlane keeps the wing alive in the panel's eyes and drains usage
-// events periodically. Heartbeat failures never kill the gateway.
-func runControlPlane(ctx context.Context, nc *node.Client, lanes []*lane.Lane, recorder *node.Recorder) {
+// runControlPlane keeps the wing alive in the panel's eyes, drains usage
+// events periodically, and ships abuse strikes. Heartbeat failures never
+// kill the gateway.
+func runControlPlane(ctx context.Context, nc *node.Client, lanes []*lane.Lane, recorder *node.Recorder, strikes <-chan node.Strike) {
 	beat := func() {
 		h := make([]node.Health, 0, len(lanes))
 		for _, l := range lanes {
@@ -172,6 +261,37 @@ func runControlPlane(ctx context.Context, nc *node.Client, lanes []*lane.Lane, r
 				case <-ticker.C:
 					if err := recorder.Flush(ctx, nc); err != nil {
 						log.Printf("usage flush failed (buffer retained): %v", err)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	if strikes != nil {
+		go func() {
+			ticker := time.NewTicker(20 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					drained, s := 0, true
+					for s {
+						select {
+						case st := <-strikes:
+							drained++
+							sctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+							if err := nc.Strike(sctx, st); err != nil {
+								log.Printf("strike report failed kind=%s: %v", st.Kind, err)
+							}
+							cancel()
+							if drained >= 50 {
+								s = false
+							}
+						default:
+							s = false
+						}
 					}
 				case <-ctx.Done():
 					return

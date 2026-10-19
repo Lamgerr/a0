@@ -11,15 +11,39 @@ import (
 )
 
 // fakeGate allows exactly one key ("sk-a0-good") and reports its id.
-type fakeGate struct{ calls int }
+// Denies a second key shape (held/coded verdicts are also exercised).
+type fakeGate struct{ calls, catalogs, opens, dones int }
 
-func (f *fakeGate) Allow(key string) (string, bool) {
+func (f *fakeGate) Allow(key, ip string) (KeyInfo, bool) {
 	f.calls++
 	if key == "sk-a0-good" {
-		return "kv-1", true
+		return KeyInfo{ID: "kv-1", RPM: 20}, true
 	}
-	return "", false
+	if key == "sk-a0-held" {
+		return KeyInfo{ID: "kv-2", HTTP: http.StatusTooManyRequests,
+			Reason: "key held for fair use — try again later", Retry: 3600}, true
+	}
+	return KeyInfo{}, false
 }
+
+func (f *fakeGate) Verify(key string) (KeyInfo, bool) {
+	if key == "sk-a0-good" {
+		return KeyInfo{ID: "kv-1"}, true
+	}
+	return KeyInfo{}, false
+}
+
+func (f *fakeGate) Catalog(ip string) (int, int) {
+	f.catalogs++
+	return 0, 0
+}
+
+func (f *fakeGate) StreamOpen(keyID string) (int, int) {
+	f.opens++
+	return 0, 0
+}
+
+func (f *fakeGate) StreamDone(keyID string) { f.dones++ }
 
 func gatedServer(t *testing.T) (http.Handler, *fakeGate) {
 	t.Helper()
@@ -55,8 +79,10 @@ func TestPublicGateDeniesMissingKey(t *testing.T) {
 	if !strings.Contains(err.Errmap.Message, "api key") {
 		t.Fatalf("message: %q", err.Errmap.Message)
 	}
-	if gate.calls != 1 {
-		t.Fatalf("gate calls = %d", gate.calls)
+	if gate.calls != 0 {
+		// identity is resolved before the gate: garbage headers never
+		// cost a control-plane touch.
+		t.Fatalf("gate calls = %d, want 0", gate.calls)
 	}
 }
 
@@ -65,6 +91,18 @@ func TestPublicGateDeniesBadKey(t *testing.T) {
 	w := authedChat(t, h, map[string]string{"Authorization": "Bearer sk-a0-bogus"})
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("code = %d, want 401", w.Code)
+	}
+}
+
+func TestFairUseDenyShapes(t *testing.T) {
+	// held key → shaped 403/429 with Retry-After, never the 401 realm
+	h, _ := gatedServer(t)
+	w := authedChat(t, h, map[string]string{"Authorization": "Bearer sk-a0-held"})
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("held code = %d, want 429: %s", w.Code, w.Body)
+	}
+	if ra := w.Header().Get("Retry-After"); ra == "" {
+		t.Fatalf("Retry-After missing on fair-use deny")
 	}
 }
 

@@ -101,6 +101,7 @@ type Event struct {
 	OutTok    int    `json:"out_tok,omitempty"`
 	Status    int    `json:"status,omitempty"`
 	LatencyMs int    `json:"latency_ms,omitempty"`
+	IP        string `json:"ip,omitempty"` // fair-use forensics
 }
 
 func (c *Client) Usage(ctx context.Context, events []Event) (int, error) {
@@ -125,6 +126,9 @@ type Key struct {
 	Name     string
 	RPM      int
 	DailyCap int
+	DayCount int    // requests already spent this UTC day (control-plane view)
+	Status   string // active / held / banned ("" = active)
+	Strikes  int    // rolling 24h abuse strikes
 }
 
 func (c *Client) Validate(ctx context.Context, key string) (*Key, error) {
@@ -136,14 +140,43 @@ func (c *Client) Validate(ctx context.Context, key string) (*Key, error) {
 		Name     string `json:"name"`
 		RPM      int    `json:"rpm"`
 		DailyCap int    `json:"daily_cap"`
+		DayCount int    `json:"day_count"`
+		Status   string `json:"status"`
+		Strikes  int    `json:"strikes"`
 	}
 	if err := c.call(ctx, "keys-validate", map[string]any{"key": key}, &reply); err != nil {
 		return nil, err
 	}
 	return &Key{
 		OK: reply.OK, Reason: reply.Reason, KeyID: reply.KeyID,
-		Tenant: reply.Tenant, Name: reply.Name, RPM: reply.RPM, DailyCap: reply.DailyCap,
+		Tenant: reply.Tenant, Name: reply.Name, RPM: reply.RPM,
+		DailyCap: reply.DailyCap, DayCount: reply.DayCount,
+		Status: reply.Status, Strikes: reply.Strikes,
 	}, nil
+}
+
+// Strike is one fair-use abuse event reported to the control plane; the
+// control plane owns the sentence (hold/ban) — wings only witness.
+type Strike struct {
+	KeyID string `json:"key_id"` // empty when the key never validated
+	Key   string `json:"key,omitempty"`
+	Kind  string `json:"kind"` // share / rate / day / tokens / ...
+	IP    string `json:"ip,omitempty"`
+}
+
+// Strike reports abuse from this node. Fire-and-forget is fine — the wing
+// keeps enforcing locally regardless of the reply.
+func (c *Client) Strike(ctx context.Context, s Strike) error {
+	var reply struct {
+		OK bool `json:"ok"`
+	}
+	if err := c.call(ctx, "node-strike", s, &reply); err != nil {
+		return err
+	}
+	if !reply.OK {
+		return fmt.Errorf("node-strike rejected")
+	}
+	return nil
 }
 
 // call marshals body and decodes the reply JSON.

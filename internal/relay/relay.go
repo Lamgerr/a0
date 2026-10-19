@@ -34,12 +34,18 @@ const (
 var ErrExhausted = errors.New("all lanes cooling, retry later")
 
 // UsageEvent is one relayed attempt, for the wing's usage recorder.
+// InTok/OutTok are byte-based approximations (÷4) — a0's fair-use budget
+// counts what crossed the wire, which streaming never reports in usage
+// chunks anyway.
 type UsageEvent struct {
 	Lane      string
 	Model     string
 	KeyID     string
+	IP        string
 	Status    int
 	LatencyMs int
+	InTok     int
+	OutTok    int
 }
 
 // Relay owns the lane chain and the http client used to reach upstreams.
@@ -53,6 +59,7 @@ type Relay struct {
 // Meta carries request-scoped attribution into Chat.
 type Meta struct {
 	KeyID string // validated virtual key id (public mode)
+	IP    string // sanitized client address (public mode forensics)
 }
 
 // New wires a relay over lanes; c is injectable for tests.
@@ -90,6 +97,8 @@ func (r *Relay) ChatMeta(w http.ResponseWriter, body []byte, meta Meta) error {
 	}
 
 	attempts := 0
+	inTok := len(body) / 4 // ≈ 4 bytes per token, in-bound is exact-ish
+	cw := &countWriter{ResponseWriter: w}
 	for _, h := range chain {
 		if attempts >= maxAttempts {
 			break
@@ -100,14 +109,17 @@ func (r *Relay) ChatMeta(w http.ResponseWriter, body []byte, meta Meta) error {
 		}
 		attempts++
 		start := time.Now()
-		ok, status := attempt(r.C, w, l, h.Model, body)
+		ok, status := attempt(r.C, cw, l, h.Model, body)
 		if r.Usage != nil {
 			r.Usage(UsageEvent{
 				Lane:      l.Name,
 				Model:     h.Model,
 				KeyID:     meta.KeyID,
+				IP:        meta.IP,
 				Status:    status,
 				LatencyMs: int(time.Since(start).Milliseconds()),
+				InTok:     inTok,
+				OutTok:    cw.n / 4,
 			})
 		}
 		if ok {
@@ -116,6 +128,24 @@ func (r *Relay) ChatMeta(w http.ResponseWriter, body []byte, meta Meta) error {
 	}
 	exhaust(w)
 	return ErrExhausted
+}
+
+// countWriter tallies the bytes the winning attempt streams to the client,
+// so the usage ledger can approximate out-tokens even on SSE.
+type countWriter struct {
+	n int
+	http.ResponseWriter
+}
+
+func (c *countWriter) Write(p []byte) (int, error) {
+	c.n += len(p)
+	return c.ResponseWriter.Write(p)
+}
+
+func (c *countWriter) Flush() {
+	if f, ok := c.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // exhaust writes the locked 502 body.
