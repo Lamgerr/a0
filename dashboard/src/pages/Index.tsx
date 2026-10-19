@@ -54,7 +54,7 @@ const FEATURES = [
   },
   {
     t: "Virtual keys",
-    b: "Revoke in a second; wings drop it from cache in 60s and raters keep their quota sides sane.",
+    b: "Revoke in a second; route caches drop it in 60s.",
   },
   {
     t: "ToS-clean lanes only",
@@ -87,8 +87,8 @@ export default function Index() {
         </h1>
         <p className="ix-sub">
           a0 pools the usable free lanes of 2026 behind an OpenAI-compatible API.
-          You ask for a category — flagships, coders, vision — and the wings
-          route, rotate keys and fail over. Never speak to a provider again.
+          You ask for a category — flagships, coders, vision — and a0
+          routes, rotates keys and fails over. Never speak to a provider again.
         </p>
         <div className="ix-cta">
           <button
@@ -151,7 +151,7 @@ export default function Index() {
         <div style={{ height: 48 }} />
 
         <div className="ix-grid-2">
-          <Panel title="Any OpenAI SDK works" desc={`Point base_url at a wing — ${A0_BASE_URL} in dev.`} flush>
+          <Panel title="Any OpenAI SDK works" desc={`Point base_url at a0 — ${A0_BASE_URL} in dev.`} flush>
             <div style={{ padding: 16 }}>
               <CodeBlock lang="bash" code={curl} wrap />
             </div>
@@ -160,7 +160,7 @@ export default function Index() {
             title={hasSupabaseEnv ? "Signup is open" : "Signup is not wired yet"}
             desc={
               hasSupabaseEnv
-                ? "SquidCloud SSO, free tier ~20 RPM / 2k req/day. Keys, quota and nodes attach to your identity."
+                ? "SquidCloud SSO, free tier ~20 RPM / 2k req/day. Keys and quota attach to your identity."
                 : "The panel browses in demo mode; minting goes live once control-plane env lands."
             }
             flush
@@ -170,7 +170,7 @@ export default function Index() {
                 {hasSupabaseEnv ? <Pill tone="ok">signup open</Pill> : <Pill tone="warn">demo mode</Pill>}
                 <span className="sa-mute" style={{ fontSize: 12.5 }}>
                   {hasSupabaseEnv
-                    ? "one SquidCloud identity across keys, quota and wings"
+                    ? "one SquidCloud identity across keys and quota"
                     : "build-time env VITE_SUPABASE_URL missing on this deploy"}
                 </span>
               </div>

@@ -11,39 +11,75 @@ import (
 )
 
 // chain entry: laneName@model. Parsed into (lane, concrete model) pairs.
+//
+// Order = product SLA: the heads mirror the curated best-first sequence shown
+// in the dashboard (capability coverage > generation > size > context), and
+// every chain ends with cross-lane tails that only fire after the curated
+// heads are exhausted, keeping a lane outage from becoming a category outage.
 var Categories = map[string][]string{
 	"a0/flagship": {
 		"xkiro@qwen/qwen3.8-max:free",
+		"xkiro@qwen/qwen3.7-plus:free",
+		"xkiro@mistralai/mistral-large-4-0",
+		"xkiro@cohere/command-a-plus",
+		"xkiro@stealth/space-bunny-alpha:free",
 		"llm7@glm-5.3",
 		"openrouter@openrouter/free",
 	},
 	"a0/reasoning": {
-		"xkiro@qwen/qwen3.7-max:free",
-		"openrouter@nvidia/nemotron-3-ultra-550b-a55b:free",
+		"xkiro@qwen/qwen3.8-max:free",
 		"xkiro@cohere/command-a-reasoning",
+		"xkiro@mistralai/mistral-large-4-0",
+		"xkiro@qwen/qwen3.6-max-preview:free",
+		"xkiro@stealth/big-pickle",
+		"openrouter@nvidia/nemotron-3-ultra-550b-a55b:free",
+		"llm7@glm-5.3",
 	},
 	"a0/coder": {
 		"xkiro@qwen/qwen3-coder-plus:free",
+		"xkiro@mistralai/devstral-medium",
+		"xkiro@mistralai/codestral-2508",
+		"xkiro@cohere/north-mini-code",
+		"xkiro@qwen/qwen3.8-max:free",
 		"llm7@deepseek-v4-pro",
-		"groq@qwen/qwen3.8-27b",
 		"openrouter@cohere/north-mini-code:free",
+		"gonka@deepseek-v4-flash-0731",
 	},
 	"a0/vision": {
+		"xkiro@qwen/qwen3-vl-plus:free",
+		"xkiro@mistralai/mistral-large-4-0",
+		"xkiro@cohere/command-a-vision",
+		"xkiro@qwen/qwen3.5-omni-plus:free",
+		"xkiro@qwen/qwen3-omni-flash:free",
 		"gemini-direct@gemini-3.8-flash",
-		"xkiro@qwen/qwen3.7-plus:free",
 		"openrouter@nvidia/nemotron-3.5-super-vl:free",
 	},
 	"a0/fast": {
-		"groq@gpt-oss-120b",
 		"xkiro@qwen/qwen3.7-flash:free",
+		"xkiro@qwen/qwen3.5-flash:free",
+		"xkiro@qwen/qwen3.8-omni-flash:free",
+		"xkiro@mistralai/ministral-8b",
+		"xkiro@mistralai/mistral-small-2603",
+		"groq@gpt-oss-120b",
 		"llm7@GLM-5.3-Flash",
+		"openrouter@openrouter/free",
 	},
 	"a0/omni": {
+		"xkiro@qwen/qwen3.8-omni-flash:free",
+		"xkiro@qwen/qwen3.5-omni-plus:free",
+		"xkiro@qwen/qwen3-omni-flash:free",
+		"xkiro@cohere/command-a-vision",
+		"xkiro@qwen/qwen3-vl-plus:free",
 		"openrouter@thinkingmachines/inkling:free",
 	},
 	"a0/long": {
-		"xkiro@qwen/qwen3.8-max:free",
+		"xkiro@qwen/qwen3-coder-plus:free",
+		"xkiro@qwen/qwen3.5-plus:free",
+		"xkiro@stealth/space-bunny-alpha:free",
+		"xkiro@meituan/longcat-2.5-preview:free",
+		"xkiro@qwen/qwen3.7-flash:free",
 		"llm7@glm-5.3",
+		"openrouter@openrouter/free",
 	},
 }
 

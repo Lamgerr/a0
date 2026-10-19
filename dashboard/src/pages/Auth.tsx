@@ -35,7 +35,7 @@ const AUTH_CSS = `
 const COPY = {
   eyebrow: 'SquidCloud SSO',
   h: 'One identity for every Squid product.',
-  p: 'a0 gates its panel behind your SquidCloud account. No new passwords here — your keys, quota and nodes all attach to the same identity.',
+  p: 'a0 gates its panel behind your SquidCloud account. No new passwords here — your keys and quota all attach to the same identity.',
 };
 
 export default function Auth() {
@@ -107,7 +107,7 @@ export default function Auth() {
           </div>
           <div className="au-meta" aria-hidden="true">
             <span>SquidCloud SSO</span>
-            <span>Categories · keys · nodes</span>
+            <span>Categories · keys · quota</span>
             <span>squidcloud</span>
           </div>
         </aside>
@@ -136,7 +136,7 @@ export default function Auth() {
             </div>
             <p className="au-legal">
 
-              a0 keys, quotas and wings attach to your SquidCloud identity — one account, revocable anywhere.
+              a0 keys and quotas attach to your SquidCloud identity — one account, revocable anywhere.
             </p>
           </div>
         </main>

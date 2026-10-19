@@ -7,7 +7,6 @@ import {
   Stat,
   Stats,
   Pill,
-  Dot,
   CodeBlock,
   CopyLine,
   btn,
@@ -20,8 +19,7 @@ import { FREE_COUNT, fmtCtx } from "@/lib/catalog";
 import { poolModels } from "@/lib/pools";
 import { listVirtualKeys } from "@/hooks/use-api-keys";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, hasSupabaseEnv } from "@/integrations/supabase/client";
-import type { NodeRow } from "@/integrations/supabase/types";
+import { hasSupabaseEnv } from "@/integrations/supabase/client";
 
 const QUICK_START = `from openai import OpenAI
 
@@ -40,25 +38,14 @@ print(r.choices[0].message.content)`;
 export default function Overview() {
   const { controlPlaneConfigured } = useAuth();
   const keys = useQuery({ queryKey: ["virtual_keys"], queryFn: listVirtualKeys });
-  const nodes = useQuery({
-    queryKey: ["nodes_overview"],
-    queryFn: async (): Promise<NodeRow[]> => {
-      if (!hasSupabaseEnv) return [];
-      const { data } = await supabase.from("nodes").select("*");
-      return data ?? [];
-    },
-  });
-
   const activeKeys = (keys.data ?? []).filter((k) => !k.revoked);
-  const nodesList = nodes.data ?? [];
-  const online = nodesList.filter((n) => n.status === "online");
 
   return (
     <div>
       <PageHead
         eyebrow="a0 / console"
         title="Overview"
-        desc="Keys, wings and the free pool — one screen."
+        desc="Keys and the free pool — one screen."
         actions={
           <>
             <Link to="/dashboard/guide" className={btn("default", "sm")}>
@@ -78,11 +65,11 @@ export default function Overview() {
           sub={controlPlaneConfigured ? "hashed · 60s edge cache" : "demo store"}
         />
         <Stat
-          label="Wings online"
-          value={controlPlaneConfigured ? online.length : "—"}
-          sub={controlPlaneConfigured ? `${nodesList.length} attached · heartbeat 30s` : "control plane offline"}
+          label="Routes"
+          value="7 categories"
+          sub="resolver picks per request"
         />
-        <Stat label="Free models" value={FREE_COUNT} sub="5 labs · resolver picks per request" />
+        <Stat label="Free models" value={FREE_COUNT} sub="5 labs · silent failover" />
         <Stat label="Failover" value="silent" sub="tiered lanes, no user-visible retries" />
       </Stats>
 
@@ -158,7 +145,7 @@ export default function Overview() {
 
       {/* quick start */}
       <div style={{ marginTop: 28 }}>
-        <Panel title="Quick start" desc="Any OpenAI SDK or framework — point it at a wing." flush>
+        <Panel title="Quick start" desc="Any OpenAI SDK or framework — point it at a0." flush>
           <div style={{ padding: 16 }}>
             <CodeBlock code={QUICK_START} lang="python" wrap />
           </div>
@@ -179,20 +166,6 @@ export default function Overview() {
       {/* posture glance */}
       <div style={{ marginTop: 24 }}>
         <Panel title="Posture" flush>
-          <Row
-            label={
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                <Dot tone={controlPlaneConfigured ? "ok" : "neutral"} pulse={controlPlaneConfigured} />
-                Wings
-              </span>
-            }
-            desc={controlPlaneConfigured ? `${online.length} of ${nodesList.length} online` : "—"}
-            children={
-              <Link to="/dashboard/nodes" className={btn("ghost", "sm")}>
-                Manage <Ico.Arrow size={12} />
-              </Link>
-            }
-          />
           <Row
             label="Keys"
             desc={controlPlaneConfigured ? `${activeKeys.length} active` : "—"}

@@ -205,7 +205,7 @@ export default function Usage() {
             ) : real && (events.data ?? []).length === 0 ? (
               <Empty
                 title="No traffic yet"
-                body="Usage events appear the moment a key routes a request through a wing."
+                body="Usage events appear the moment a key routes a request through a0."
               />
             ) : (
               <ResponsiveContainer width="100%" height="100%">

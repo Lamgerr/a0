@@ -15,7 +15,6 @@ const NAV = [
   { to: "/dashboard/usage", label: "Usage" },
   { to: "/dashboard/keys", label: "API Keys" },
   { to: "/dashboard/models", label: "Models" },
-  { to: "/dashboard/nodes", label: "Nodes" },
   { to: "/dashboard/guide", label: "Guide" },
 ];
 
@@ -25,6 +24,7 @@ const NAV = [
 const SHELL_CSS = `
  .sa-tabs-wrap { max-width: 1120px; margin: 0 auto; padding: 0 var(--sa-gut); }
  a.sa-tab { -webkit-tap-highlight-color: transparent; }
+ a.sa-tab:focus, a.sa-tab:focus-visible { outline: none; }
  a.sa-tab.is-active { color: var(--sa-text) !important; border-bottom-color: var(--sa-text) !important; }
  .sa-tabs::-webkit-scrollbar { display: none; }
  .sa-tabs { scrollbar-width: none; }
@@ -97,10 +97,9 @@ export default function DashboardLayout() {
                   active
                     ? {
                         color: "var(--sa-text)",
-                        borderBottom: "2px solid var(--sa-text)",
-                        marginBottom: -2,
+                        borderBottomColor: "var(--sa-text)",
                       }
-                    : undefined
+                    : { outline: "none" }
                 }
               >
                 {active && (

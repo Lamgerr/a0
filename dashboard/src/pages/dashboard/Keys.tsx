@@ -50,7 +50,7 @@ export default function Keys() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["virtual_keys"] });
       setConfirmId(null);
-      toast.success("Key revoked. Wings drop it within 60s.");
+      toast.success("Key revoked — a0 drops it within 60s.");
     },
   });
 
@@ -90,7 +90,7 @@ export default function Keys() {
                       {k.name}
                       {k.revoked && (
                         <span style={{ marginLeft: 8 }}>
-                          <Pill title="revoked — wings stop accepting it within 60s">
+                          <Pill title="revoked — a0 stops accepting it within 60s">
                             revoked
                           </Pill>
                         </span>
@@ -168,7 +168,7 @@ export default function Keys() {
         <div style={{ marginTop: 16 }}>
           <Note tone={controlPlaneConfigured ? "info" : "warn"} title={controlPlaneConfigured ? `${activeCount} active.` : "Demo store."}>
             {controlPlaneConfigured
-              ? "Keys are hashed server-side; the shown secret never lands anywhere else. Revoked keys drop out of wing caches in 60s."
+              ? "Keys are hashed server-side; the shown secret never lands anywhere else. Revoked keys drop out of route caches in 60s."
               : "Minted keys live in this browser's memory only — wire the control plane env for real keys."}
           </Note>
         </div>
