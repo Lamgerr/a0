@@ -14,48 +14,42 @@ import {
 } from "@/components/custom/squid-app";
 import { CATEGORIES } from "@/lib/a0";
 import { MODELS, LABS, FREE_COUNT, fmtCtx, type CatalogModel } from "@/lib/catalog";
+import { poolModels } from "@/lib/pools";
 import { laneLabel } from "@/lib/lane-label";
 import { hasSupabaseEnv, supabase } from "@/integrations/supabase/client";
 
 /* Pool concept chips — capability language only, no infrastructure. */
 const POOL_META: Record<
   string,
-  { chips: string[]; blurb: string; pick: (m: CatalogModel) => boolean }
+  { chips: string[]; blurb: string }
 > = {
   "a0/flagship": {
     chips: ["1M ctx", "tools", "general"],
     blurb: "Go-to pool for everyday work — the strongest usable free round-trip.",
-    pick: (m) => m.ctx >= 128_000 && m.tools,
   },
   "a0/reasoning": {
     chips: ["thinking", "multi-step"],
-    blurb: "Prefers lanes that expose effort-controlled deep thinking.",
-    pick: (m) => m.reasoning,
+    blurb: "Effort-controlled deep thinking for hard problems.",
   },
   "a0/coder": {
     chips: ["tool calling", "code"],
     blurb: "Tool-calling-first lanes tuned for repo work and diffs.",
-    pick: (m) => m.tools,
   },
   "a0/vision": {
     chips: ["image-in"],
     blurb: "Accepts images inline — screenshots, scans, diagrams.",
-    pick: (m) => m.vision,
   },
   "a0/fast": {
     chips: ["low latency", "drafting"],
     blurb: "Snappiest free lanes for chat and drafts.",
-    pick: (m) => m.ctx >= 32_000,
   },
   "a0/omni": {
     chips: ["text + image", "omni"],
-    blurb: "Mixed-input chains; image can ride along with text.",
-    pick: (m) => (m.vision && m.modality !== "chat") || (m.vision && m.id.includes("omni")),
+    blurb: "Mixed-input lanes; image can ride along with text.",
   },
   "a0/long": {
     chips: ["1M ctx", "big docs"],
     blurb: "Longest-context lanes for whole-codebase or book-scale docs.",
-    pick: (m) => m.ctx >= 500_000,
   },
 };
 
@@ -199,7 +193,7 @@ export default function Models() {
         <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
           {CATEGORIES.map((c) => {
             const meta = POOL_META[c.id]!;
-            const picks = MODELS.filter((m) => meta.pick(m)).slice(0, 3);
+            const picks = poolModels(c.id);
             return (
               <Panel key={c.id} flush className="pool-card">
                 <div style={{ padding: "18px 18px 14px" }}>
@@ -207,6 +201,7 @@ export default function Models() {
                     <code className="sa-mono" style={{ font: "500 15px/1 var(--sa-mono)", color: "var(--sa-text)" }}>
                       {c.id}
                     </code>
+                    <Pill title="best models first; resolver falls through on degradation">{picks.length || "—"}</Pill>
                   </div>
                   <p style={{ margin: "9px 0 0", fontSize: 13, lineHeight: 1.55, color: "var(--sa-text-2)", minHeight: 40 }}>
                     {meta.blurb}
@@ -222,17 +217,18 @@ export default function Models() {
                     className="lg-text-label"
                     style={{ marginBottom: 9 }}
                   >
-                    currently resolving to
+                    resolution order — best first
                   </div>
                   <div style={{ display: "grid", gap: 8 }}>
-                    {picks.map((m) => (
+                    {picks.map((m, i) => (
                       <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 9 }}>
                         <LabMark lab={m.lab} size={22} />
                         <span style={{ fontSize: 12.5, color: "var(--sa-text)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {m.name}
                         </span>
-                        <span style={{ marginLeft: "auto", flex: "none" }}>
+                        <span style={{ marginLeft: "auto", flex: "none", display: "inline-flex", gap: 4, alignItems: "center" }}>
                           <Pill title="context">{fmtCtx(m.ctx)}</Pill>
+                          <Pill tone={i === 0 ? "ok" : "neutral"} title={i === 0 ? "primary host" : `fallback #${i}`}>{i === 0 ? "lead" : i}</Pill>
                         </span>
                       </div>
                     ))}

@@ -16,7 +16,8 @@ import {
   Note,
 } from "@/components/custom/squid-app";
 import { CATEGORIES, A0_BASE_URL } from "@/lib/a0";
-import { FREE_COUNT, fmtCtx, MODELS } from "@/lib/catalog";
+import { FREE_COUNT, fmtCtx } from "@/lib/catalog";
+import { poolModels } from "@/lib/pools";
 import { listVirtualKeys } from "@/hooks/use-api-keys";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, hasSupabaseEnv } from "@/integrations/supabase/client";
@@ -35,23 +36,6 @@ r = client.chat.completions.create(
 )
 
 print(r.choices[0].message.content)`;
-
-/* category → what a caller can rely on, computed from the live free catalog */
-const POOL_CHIPS: Record<string, (m: typeof MODELS[number]) => boolean> = {
-  "a0/flagship": (m) => m.ctx >= 128_000 && m.tools,
-  "a0/reasoning": (m) => m.reasoning,
-  "a0/coder": (m) => m.tools,
-  "a0/vision": (m) => m.vision,
-  "a0/fast": (m) => m.ctx >= 32_000,
-  "a0/omni": (m) => m.vision,
-  "a0/long": (m) => m.ctx >= 500_000,
-};
-
-function poolStats(id: string) {
-  const picks = MODELS.filter((m) => POOL_CHIPS[id]?.(m) ?? false);
-  const topCtx = picks.reduce((a, m) => Math.max(a, m.ctx), 0);
-  return { count: picks.length, topCtx };
-}
 
 export default function Overview() {
   const { controlPlaneConfigured } = useAuth();
@@ -139,7 +123,8 @@ export default function Overview() {
         />
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
           {CATEGORIES.map((c) => {
-            const { count, topCtx } = poolStats(c.id);
+            const hosts = poolModels(c.id);
+            const topCtx = hosts.reduce((a, m) => Math.max(a, m.ctx), 0);
             return (
               <Panel key={c.id} flush>
                 <div style={{ padding: "15px 16px 13px" }}>
@@ -147,7 +132,11 @@ export default function Overview() {
                     <code className="sa-mono" style={{ font: "500 14.5px/1 var(--sa-mono)", color: "var(--sa-text)" }}>
                       {c.id}
                     </code>
-                    <Pill title="capable free models in this pool">{count}</Pill>
+                    {hosts[0] && (
+                      <Pill title="primary host">
+                        {hosts[0].name}
+                      </Pill>
+                    )}
                   </div>
                   <p style={{ margin: "8px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--sa-text-2)" }}>
                     {c.desc}
@@ -158,6 +147,7 @@ export default function Overview() {
                     {(c.id === "a0/vision" || c.id === "a0/omni") && <Pill>image-in</Pill>}
                     {c.id === "a0/reasoning" && <Pill>deep thinking</Pill>}
                     {c.id === "a0/fast" && <Pill>low latency</Pill>}
+                    {c.id === "a0/long" && <Pill>big docs</Pill>}
                   </div>
                 </div>
               </Panel>

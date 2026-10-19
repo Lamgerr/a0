@@ -83,16 +83,42 @@ export default function DashboardLayout() {
       )}
       <nav className="sa-tabs-wrap">
         <div className="sa-tabs" aria-label="Console sections">
-          {NAV.map(({ to, label, end }) => (
-            <Link
-              key={to}
-              to={to}
-              aria-current={tabActive(pathname, to, end) ? "page" : undefined}
-              className={`sa-tab${tabActive(pathname, to, end) ? " is-active" : ""}`}
-            >
-              {label}
-            </Link>
-          ))}
+          {NAV.map(({ to, label, end }) => {
+            const active = tabActive(pathname, to, end);
+            /* Inline styles kill the cascade war for good: no stylesheet
+               rule, layer or re-injection order can mute the active tab. */
+            return (
+              <Link
+                key={to}
+                to={to}
+                aria-current={active ? "page" : undefined}
+                className={`sa-tab${active ? " is-active" : ""}`}
+                style={
+                  active
+                    ? {
+                        color: "var(--sa-text)",
+                        borderBottom: "2px solid var(--sa-text)",
+                        marginBottom: -2,
+                      }
+                    : undefined
+                }
+              >
+                {active && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "inline-block",
+                      width: 5,
+                      height: 5,
+                      borderRadius: "50%",
+                      background: "var(--sa-text)",
+                    }}
+                  />
+                )}
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
       <main className="sa-wrap">
