@@ -1,11 +1,9 @@
 # a0
 
-**One OpenAI-compatible endpoint. Pooled free lanes. A routing brain.**
+**OpenAI-compatible inference gateway.**
 
-a0 is a local, free-first inference gateway. Install it, point any OpenAI client at it, and
-code with the best free models available — no signup, no card, no hosted service. It is not
-an agent and it does not ship a chat UI; your client (Cline, Roo, Continue, Aider, OpenWebUI,
-the OpenAI SDK) keeps doing that.
+a0 is a local, self-hosted inference gateway. It pools provider lanes, routes by capability,
+races lanes in parallel, enhances prompts, and exposes a single OpenAI-compatible endpoint.
 
 ```
 your client ──► http://127.0.0.1:8082/v1 ──► a0 ──► free lanes

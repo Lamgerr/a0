@@ -1,7 +1,7 @@
 {
   "name": "a0-gateway",
   "version": "0.1.0",
-  "description": "Free-first, self-hosted OpenAI-compatible inference gateway with a routing brain",
+  "description": "Self-hosted OpenAI-compatible inference gateway with capability routing, parallel racing, and prompt enhancement",
   "type": "module",
   "bin": {
     "a0": "bin/a0.js"

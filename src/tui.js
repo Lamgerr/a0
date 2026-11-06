@@ -1,88 +1,110 @@
-// The TUI. Zero dependencies, ANSI only, designed to be readable over SSH
-// and on a phone. Everything configurable is reachable from here.
+// TUI — full-screen, OpenCode-style. Zero dependencies, ANSI only.
+// Uses the alternate screen buffer so the shell history is preserved.
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
-import { modelCounts, resolveProviders, setModelEnabled } from "./registry.js";
+import { resolveProviders, modelCounts, setModelEnabled, activeProviders } from "./registry.js";
 import { mask, saveConfig as persist, redact, VERSION } from "./config.js";
-import { checkLatest } from "./update.js";
-import {
-  applySetupMode,
-  guideLines,
-  modeSummary,
-  optional,
-  recommended,
-} from "./setup.js";
+import { applySetupMode, guideLines, modeSummary, optional, recommended } from "./setup.js";
+import { checkLatest, installLatest } from "./update.js";
 
+// ── terminal helpers ──────────────────────────────────────────────────────
 const tty = Boolean(stdout.isTTY);
-const color = (code) => (s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : String(s));
+const ESC = "\x1b";
+const ALT_ON = `${ESC}[?1049h${ESC}[?25l`;
+const ALT_OFF = `${ESC}[?25h${ESC}[?1049l`;
+const CLEAR = `${ESC}[2J${ESC}[H`;
+const RESET = `${ESC}[0m`;
+
+const color = (code) => (s) => tty ? `${ESC}[${code}m${s}${RESET}` : String(s);
 const bold = color("1");
 const dim = color("2");
+const italic = color("3");
 const cyan = color("36");
 const green = color("32");
 const yellow = color("33");
 const red = color("31");
+const blue = color("34");
+const magenta = color("35");
+const white = color("37");
 
-export function clear() {
-  if (tty) stdout.write("\x1b[2J\x1b[H");
+const BOX = { tl: "┌", tr: "┐", bl: "└", br: "┘", h: "─", v: "│" };
+
+function termSize() { return { w: stdout.columns || 80, h: stdout.rows || 24 }; }
+function move(r, c) { stdout.write(`${ESC}[${r};${c}H`); }
+function writeAt(r, c, text) { move(r, c); stdout.write(text); }
+
+// ── input handling ────────────────────────────────────────────────────────
+let keyHandler = null;
+let inputBuffer = "";
+
+function setupRawInput() {
+  if (!stdin.isTTY) return;
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.setEncoding("utf8");
+  stdin.on("data", (chunk) => { inputBuffer += chunk; processInput(); });
 }
 
-export function banner() {
-  clear();
-  stdout.write(`
-${bold(cyan("  a0"))} ${dim(`v${VERSION}`)}  ${dim("free-first inference gateway")}
-${dim("  one endpoint, pooled free lanes, a routing brain")}
-`);
+function processInput() {
+  while (inputBuffer.length > 0) {
+    let consumed = false;
+    if (inputBuffer.startsWith("\x1b[")) {
+      const match = inputBuffer.match(/^\x1b\[[0-9;]*[A-Za-z]/);
+      if (match) {
+        const seq = match[0];
+        inputBuffer = inputBuffer.slice(seq.length);
+        if (keyHandler) keyHandler({ type: "key", key: seq });
+        consumed = true;
+      } else break;
+    } else if (inputBuffer.startsWith("\x1b")) {
+      inputBuffer = inputBuffer.slice(1);
+      if (keyHandler) keyHandler({ type: "key", key: "escape" });
+      consumed = true;
+    } else {
+      const ch = inputBuffer[0];
+      inputBuffer = inputBuffer.slice(1);
+      if (ch === "\r" || ch === "\n") { if (keyHandler) keyHandler({ type: "key", key: "enter" }); }
+      else if (ch === "\t") { if (keyHandler) keyHandler({ type: "key", key: "tab" }); }
+      else if (ch === "\x7f" || ch === "\b") { if (keyHandler) keyHandler({ type: "key", key: "backspace" }); }
+      else if (ch === "\x03") { cleanup(); process.exit(0); }
+      else if (ch >= " ") { if (keyHandler) keyHandler({ type: "char", char: ch }); }
+      consumed = true;
+    }
+    if (!consumed) break;
+  }
 }
 
-// A single readline interface feeding a line queue. This works for both
-// interactive typing and piped multi-line input: every line is queued and
-// consumed one at a time, so pasted scripts are not dropped.
+function setKeyHandler(handler) { keyHandler = handler; }
+
+function cleanup() {
+  if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); }
+  stdout.write(ALT_OFF);
+}
+
+// ── shared readline for non-TTY / forms ───────────────────────────────────
 let rl = null;
 const lineQueue = [];
 let lineWaiter = null;
 
 function ensureReader() {
   if (rl) return;
-  rl = readline.createInterface({
-    input: stdin,
-    output: stdout,
-    terminal: Boolean(stdout.isTTY),
-  });
+  rl = readline.createInterface({ input: stdin, output: stdout, terminal: Boolean(stdout.isTTY) });
   rl.on("line", (line) => {
-    if (lineWaiter) {
-      const w = lineWaiter;
-      lineWaiter = null;
-      w(line);
-    } else {
-      lineQueue.push(line);
-    }
+    if (lineWaiter) { const w = lineWaiter; lineWaiter = null; w(line); }
+    else lineQueue.push(line);
   });
-  rl.on("close", () => {
-    if (lineWaiter) {
-      const w = lineWaiter;
-      lineWaiter = null;
-      w("");
-    }
-  });
+  rl.on("close", () => { if (lineWaiter) { const w = lineWaiter; lineWaiter = null; w(""); } });
 }
 
 function readLine() {
   ensureReader();
   if (lineQueue.length > 0) return Promise.resolve(lineQueue.shift());
-  return new Promise((resolve) => {
-    lineWaiter = resolve;
-  });
+  return new Promise((resolve) => { lineWaiter = resolve; });
 }
 
-/** Release stdin so the process can exit. Safe to call more than once. */
 export function closeInput() {
-  if (rl) {
-    rl.close();
-    rl = null;
-    lineQueue.length = 0;
-    lineWaiter = null;
-  }
+  if (rl) { rl.close(); rl = null; lineQueue.length = 0; lineWaiter = null; }
 }
 
 async function ask(question, def = "") {
@@ -97,7 +119,6 @@ async function confirm(question, def = true) {
   return answer === "y" || answer === "yes";
 }
 
-/** Read a secret without echoing it. */
 export function promptSecret(question) {
   return new Promise((resolve) => {
     stdout.write(question);
@@ -105,7 +126,6 @@ export function promptSecret(question) {
       readLine().then((answer) => resolve(answer.trim()));
       return;
     }
-    // Raw mode owns the keyboard; pause the line reader first.
     closeInput();
     stdin.setRawMode(true);
     stdin.resume();
@@ -113,38 +133,22 @@ export function promptSecret(question) {
     const onData = (buf) => {
       const text = buf.toString("utf8").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
       for (const ch of text) {
-        if (ch === "\r" || ch === "\n") {
-          cleanup();
-          stdout.write("\n");
-          resolve(value);
-          return;
-        }
-        if (ch === "\u0003") {
-          cleanup();
-          stdout.write("\n");
-          process.exit(130);
-        }
-        if (ch === "\u007f" || ch === "\b") {
-          if (value) {
-            value = value.slice(0, -1);
-            stdout.write("\b \b");
-          }
-          continue;
-        }
-        if (ch >= " " && ch !== "\u001b") {
-          value += ch;
-          stdout.write("•");
-        }
+        if (ch === "\r" || ch === "\n") { cleanup2(); stdout.write("\n"); resolve(value); return; }
+        if (ch === "\u0003") { cleanup2(); stdout.write("\n"); process.exit(130); }
+        if (ch === "\u007f" || ch === "\b") { if (value) { value = value.slice(0, -1); stdout.write("\b \b"); } continue; }
+        if (ch >= " " && ch !== "\u001b") { value += ch; stdout.write("•"); }
       }
     };
-    const cleanup = () => {
-      stdin.setRawMode(false);
-      stdin.pause();
-      stdin.removeListener("data", onData);
-      ensureReader();
-    };
+    const cleanup2 = () => { stdin.setRawMode(false); stdin.pause(); stdin.removeListener("data", onData); ensureReader(); };
     stdin.on("data", onData);
   });
+}
+
+// ── original helpers ──────────────────────────────────────────────────────
+export function clear() { if (tty) stdout.write("\x1b[2J\x1b[H"); }
+export function banner() {
+  clear();
+  stdout.write(`\n${bold(cyan("  a0"))} ${dim(`v${VERSION}`)}\n${dim("  OpenAI-compatible inference gateway")}\n`);
 }
 
 function tierLabel(p) {
@@ -166,129 +170,83 @@ function capLine(p) {
 }
 
 function providerList(providers) {
-  return providers
-    .map((p, i) => {
-      const n = bold(String(i + 1).padStart(2));
-      return `  ${n}. ${p.enabled ? green("●") : dim("○")} ${p.label.padEnd(18)} ${capLine(p)}`;
-    })
-    .join("\n");
+  return providers.map((p, i) => {
+    const n = bold(String(i + 1).padStart(2));
+    return `  ${n}. ${p.enabled ? green("●") : dim("○")} ${p.label.padEnd(18)} ${capLine(p)}`;
+  }).join("\n");
 }
 
 function saveKey(cfg, id, key) {
   cfg.providers[id] = { ...(cfg.providers[id] || {}), key, enabled: true };
 }
 
-/** First-run setup. Guides keys first; keyless is the fallback. */
+function testProvider(p) {
+  const url = `${p.baseUrl.replace(/\/+$/, "")}/models`;
+  const started = Date.now();
+  return fetch(url, { signal: AbortSignal.timeout(8000), headers: p.key ? { authorization: `Bearer ${p.key}` } : {} })
+    .then((res) => ({ ok: res.ok, status: res.status, ms: Date.now() - started }))
+    .catch((err) => ({ ok: false, status: err.name === "TimeoutError" ? "timeout" : err.message, ms: Date.now() - started }));
+}
+
+// ── setup wizard ──────────────────────────────────────────────────────────
 export async function setupWizard(cfg) {
   banner();
-  stdout.write(`
-${bold("Setup")}
-
-a0 works two ways:
-  ${green("recommended")}  add free keys from legit providers — better models, higher limits, real failover
-  ${dim("keyless")}      skip everything — a0 uses anonymous free lanes
-
-Add at least two keys for racing and failover. Press enter to skip any key.
-`);
-
+  stdout.write(`\n${bold("Setup")}\n\na0 operates in two modes:\n  ${green("keyed")}      provider API keys — better models, higher limits, failover\n  ${dim("keyless")}    anonymous free lanes, no signup required\n\nAdd at least two keys for racing and failover. Press enter to skip any key.\n`);
   const providers = resolveProviders(cfg);
-
   stdout.write(`\n${bold("Recommended free providers")}\n`);
   for (const p of recommended(providers)) {
     stdout.write(`\n  ${bold(p.label)}  ${dim("· recommended")}\n`);
     for (const line of guideLines(p)) stdout.write(`    ${dim(line)}\n`);
     const key = (await promptSecret(`    Paste key ${dim("(enter to skip)")}: `)).trim();
-    if (key) {
-      saveKey(cfg, p.id, key);
-      stdout.write(`    ${green("✓")} ${p.label} enabled\n`);
-    }
+    if (key) { saveKey(cfg, p.id, key); stdout.write(`    ${green("✓")} ${p.label} enabled\n`); }
   }
-
   const wantsOptional = await confirm("\nConfigure optional providers too? (tighter free limits)", false);
   if (wantsOptional) {
     for (const p of optional(providers)) {
       stdout.write(`\n  ${bold(p.label)}  ${dim("· optional")}\n`);
       for (const line of guideLines(p)) stdout.write(`    ${dim(line)}\n`);
-      const key = (await promptSecret(`    Paste key ${dim("(enter to skip)")}: `)).trim();
-      if (key) {
-        saveKey(cfg, p.id, key);
-        stdout.write(`    ${green("✓")} ${p.label} enabled\n`);
-      }
+      const key = (await promptSecret(`    Paste key ${dim("(enter to skip)")} `)).trim();
+      if (key) { saveKey(cfg, p.id, key); stdout.write(`    ${green("✓")} ${p.label} enabled\n`); }
     }
   }
-
   const mode = applySetupMode(cfg);
   stdout.write(`\n${bold("Mode")}  ${mode.mode === "keyed" ? green(modeSummary(mode)) : dim(modeSummary(mode))}\n`);
   if (mode.mode === "keyed") {
-    stdout.write(
-      dim("  Anonymous lanes are off so your keyed lanes are used first. You can change this any time.\n"),
-    );
     const keep = await confirm("Keep anonymous lanes on as a fallback?", false);
     if (keep) {
-      for (const id of mode.disabled) {
-        cfg.providers[id] = { ...(cfg.providers[id] || {}), enabled: true };
-      }
+      for (const id of mode.disabled) cfg.providers[id] = { ...(cfg.providers[id] || {}), enabled: true };
       cfg.routing.preferKeyless = true;
     }
   }
-
   stdout.write(`\n${bold("Server")}\n`);
   cfg.port = Number.parseInt(await ask("Port", String(cfg.port)), 10) || cfg.port;
   cfg.host = await ask("Bind host", cfg.host);
-
   stdout.write(`\n${bold("Behaviour")}\n`);
   cfg.enhance = await confirm("Enhance every prompt with a0's operating contract", cfg.enhance);
   cfg.race = Math.min(4, Math.max(1, Number.parseInt(await ask("Lanes raced in parallel", String(cfg.race)), 10) || cfg.race));
-
   stdout.write(`\n${bold("Updates")}\n`);
   cfg.updates = cfg.updates || {};
-  cfg.updates.autoCheck = await confirm("Check for a0 updates on startup", cfg.updates.autoCheck !== false);
+  cfg.updates.autoCheck = await confirm("Check for updates on startup", cfg.updates.autoCheck !== false);
   cfg.updates.autoInstall = await confirm("Install updates automatically (restart to apply)", Boolean(cfg.updates.autoInstall));
-
   const file = persist(cfg);
   stdout.write(`\n${green("✓")} saved ${dim(file)}\n`);
   await ask("Press enter to start a0", "");
   return cfg;
 }
 
-async function testProvider(p) {
-  const url = `${p.baseUrl.replace(/\/+$/, "")}/models`;
-  const started = Date.now();
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: p.key ? { authorization: `Bearer ${p.key}` } : {},
-    });
-    return { ok: res.ok, status: res.status, ms: Date.now() - started };
-  } catch (err) {
-    return { ok: false, status: err.name === "TimeoutError" ? "timeout" : err.message, ms: Date.now() - started };
-  }
-}
-
-/** Per-model selection for one keyed lane. Anonymous lanes stay curated. */
+// ── model menu ────────────────────────────────────────────────────────────
 export async function modelMenu(cfg, p) {
   banner();
   if (p.keyless && !p.hasKey) {
-    stdout.write(`
-  ${bold(p.label)} is part of a0's ${green("anonymous pool")}.
-
-  ${dim("Its models are curated by a0 and cannot be selected individually.")}
-  ${dim("Add a key for this provider to unlock per-model selection.")}
-${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}
-`);
+    stdout.write(`\n  ${bold(p.label)} is part of a0's ${green("anonymous pool")}.\n  ${dim("Its models are curated by a0 and cannot be selected individually.")}\n  ${dim("Add a key for this provider to unlock per-model selection.")}\n${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}\n`);
     await ask("Press enter", "");
     return;
   }
   if (!p.hasKey) {
-    stdout.write(`
-  ${bold(p.label)} has no key yet.
-
-  ${dim("Add a key first:")} ${p.setup?.url || dim("see `guide` for this lane")}
-`);
+    stdout.write(`\n  ${bold(p.label)} has no key yet.\n  ${dim("Add a key first:")} ${p.setup?.url || dim("see guide")}\n`);
     await ask("Press enter", "");
     return;
   }
-
   for (;;) {
     banner();
     const fresh = resolveProviders(cfg).find((x) => x.id === p.id) || p;
@@ -296,31 +254,20 @@ ${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}
     stdout.write(`\n${bold(`${fresh.label} models`)}\n\n`);
     for (const [i, m] of fresh.models.entries()) {
       const on = m.enabled !== false;
-      const caps = [m.tools ? "tools" : "", m.vision ? "vision" : "", m.fast ? "fast" : ""]
-        .filter(Boolean)
-        .join(",");
+      const caps = [m.tools ? "tools" : "", m.vision ? "vision" : "", m.fast ? "fast" : ""].filter(Boolean).join(",");
       const meta = `${Math.round((m.context || 0) / 1000)}k${caps ? ` · ${caps}` : ""}`;
-      stdout.write(
-        `  ${on ? green("●") : dim("○")} ${bold(String(i + 1).padStart(2))}. ${m.id.padEnd(34)} ${dim(meta)}\n`,
-      );
+      stdout.write(`  ${on ? green("●") : dim("○")} ${bold(String(i + 1).padStart(2))}. ${m.id.padEnd(34)} ${dim(meta)}\n`);
     }
     stdout.write(`\n  ${dim(`${enabled}/${total} enabled · toggle <n> · all · none · add · back`)}\n`);
     const input = (await ask("Command", "back")).trim().toLowerCase();
     const [cmd, arg] = input.split(/\s+/);
     if (cmd === "back" || cmd === "b") return;
-
     const ids = fresh.models.map((m) => m.id);
-
-    if (cmd === "all") {
-      for (const id of ids) setModelEnabled(cfg, fresh.id, id, true, ids);
-      persist(cfg);
-      continue;
-    }
+    if (cmd === "all") { for (const id of ids) setModelEnabled(cfg, fresh.id, id, true, ids); persist(cfg); continue; }
     if (cmd === "none") {
       if (!(await confirm(`Disable all ${total} models on ${fresh.label}?`, false))) continue;
       for (const id of ids) setModelEnabled(cfg, fresh.id, id, false, ids);
-      persist(cfg);
-      continue;
+      persist(cfg); continue;
     }
     if (cmd === "add" || cmd === "a") {
       const modelId = (await ask("  Model id")).trim();
@@ -331,10 +278,7 @@ ${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}
       const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("    Quality 1-5", "3"), 10) || 3));
       const fast = await confirm("    Fast lane?", false);
       const override = cfg.providers[fresh.id] || {};
-      if (!Array.isArray(override.models)) override.models = (fresh.models || []).map((m) => {
-        const { providerId, providerLabel, keyless, enabled, ...rest } = m;
-        return rest;
-      });
+      if (!Array.isArray(override.models)) override.models = fresh.models.map((m) => { const { providerId, providerLabel, keyless, enabled, ...rest } = m; return rest; });
       override.models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
       cfg.providers[fresh.id] = override;
       persist(cfg);
@@ -342,37 +286,27 @@ ${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}
       await ask("Press enter", "");
       continue;
     }
-
     const idx = Number.parseInt(arg, 10) - 1;
     const model = fresh.models[idx];
     if (!model) continue;
     if (cmd === "toggle" || cmd === "t") {
       const next = model.enabled === false;
-      if (!next && enabled === 1) {
-        stdout.write(`\n  ${yellow("At least one model must stay enabled on a keyed lane.")}\n`);
-        await ask("Press enter", "");
-        continue;
-      }
+      if (!next && enabled === 1) { stdout.write(`\n  ${yellow("At least one model must stay enabled.")}\n`); await ask("Press enter", ""); continue; }
       setModelEnabled(cfg, fresh.id, model.id, next, ids);
       persist(cfg);
     }
   }
 }
 
+// ── provider menu ─────────────────────────────────────────────────────────
 export async function providerMenu(cfg) {
   for (;;) {
     banner();
     const providers = resolveProviders(cfg);
-    stdout.write(`
-${bold("Lanes")}
-${providerList(providers)}
-
-  ${dim("toggle <n> · key <n> · models <n> · guide <n> · test <n> · testall · back")}
-`);
+    stdout.write(`\n${bold("Lanes")}\n${providerList(providers)}\n\n  ${dim("toggle <n> · key <n> · models <n> · guide <n> · test <n> · testall · back")}\n`);
     const input = (await ask("Command", "back")).trim().toLowerCase();
     const [cmd, arg] = input.split(/\s+/);
     if (cmd === "back" || cmd === "b") return;
-
     if (cmd === "testall") {
       stdout.write("\n");
       for (const p of providers.filter((x) => x.enabled)) {
@@ -382,44 +316,35 @@ ${providerList(providers)}
       await ask("\nPress enter", "");
       continue;
     }
-
     const idx = Number.parseInt(arg, 10) - 1;
     const p = providers[idx];
     if (!p) continue;
     cfg.providers[p.id] = cfg.providers[p.id] || {};
-
     if (cmd === "toggle" || cmd === "t") {
       if (!p.enabled && !p.keyless && !p.hasKey) {
         const key = (await promptSecret(`  ${p.label} API key: `)).trim();
         if (!key) continue;
         saveKey(cfg, p.id, key);
-        persist(cfg);
-        continue;
+        persist(cfg); continue;
       }
       cfg.providers[p.id].enabled = !p.enabled;
       persist(cfg);
     } else if (cmd === "key" || cmd === "k") {
       const key = (await promptSecret(`  ${p.label} API key ${p.hasKey ? `(current ${mask(p.key)})` : ""}: `)).trim();
-      if (key) {
-        saveKey(cfg, p.id, key);
-        persist(cfg);
-      }
+      if (key) { saveKey(cfg, p.id, key); persist(cfg); }
     } else if (cmd === "guide" || cmd === "g") {
       stdout.write(`\n  ${bold(p.label)}  ${tierLabel(p)}\n`);
       for (const line of guideLines(p)) stdout.write(`    ${line}\n`);
       await ask("\nPress enter", "");
     } else if (cmd === "models" || cmd === "m") {
-      if (p.keyless && !p.hasKey) {
-        await modelMenu(cfg, p);
-      } else if (!p.hasKey) {
+      if (p.keyless && !p.hasKey) await modelMenu(cfg, p);
+      else if (!p.hasKey) {
         const key = (await promptSecret(`  ${p.label} API key: `)).trim();
         if (!key) continue;
         saveKey(cfg, p.id, key);
         persist(cfg);
         await modelMenu(cfg, resolveProviders(cfg).find((x) => x.id === p.id) || p);
-      } else {
-        await modelMenu(cfg, p);
-      }
+      } else await modelMenu(cfg, p);
     } else if (cmd === "test") {
       const r = await testProvider(p);
       stdout.write(`  ${r.ok ? green("✓ reachable") : red(`✗ ${r.status}`)} ${dim(`${r.ms}ms`)}\n`);
@@ -428,51 +353,24 @@ ${providerList(providers)}
   }
 }
 
-/** Print the result of an npm version check and remember when it ran. */
-export async function showUpdateCheck(cfg) {
-  const result = await checkLatest();
-  cfg.updates = { ...(cfg.updates || {}), lastCheck: Date.now() };
-  if (!result.ok) {
-    stdout.write(`\n  ${red("✗")} update check failed: ${result.error || result.status}\n`);
-    return result;
-  }
-  if (result.update) {
-    stdout.write(`\n  ${yellow("↑")} a0 v${result.latest} is available ${dim(`(you have v${result.current})`)}\n`);
-    stdout.write(`  ${dim(`Install: npm install -g ${result.packageName}@latest  (or run \`a0 update\`)`)}\n`);
-  } else {
-    stdout.write(`\n  ${green("✓")} up to date ${dim(`v${result.current}`)}\n`);
-  }
-  return result;
-}
-
-/** Walk the user through creating a new provider lane. */
+// ── add provider/model wizards ────────────────────────────────────────────
 export async function addProviderWizard(cfg) {
   banner();
   stdout.write(`\n${bold("Add provider")}\n\n`);
   const id = (await ask("Provider id (slug, lowercase)")).trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
   if (!id) return;
-  if (cfg.providers[id]) {
-    stdout.write(`  ${yellow("A provider with id")} ${bold(id)} ${yellow("already exists.")}\n`);
-    await ask("Press enter", "");
-    return;
-  }
+  if (cfg.providers[id]) { stdout.write(`  ${yellow("Provider")} ${bold(id)} ${yellow("already exists.")}\n`); await ask("Press enter", ""); return; }
   const label = (await ask("Display name", id)) || id;
   const baseUrl = (await ask("Base URL (OpenAI-compatible)")).trim().replace(/\/+$/, "");
-  if (!baseUrl) {
-    stdout.write(`  ${red("Base URL is required.")}\n`);
-    await ask("Press enter", "");
-    return;
-  }
+  if (!baseUrl) { stdout.write(`  ${red("Base URL is required.")}\n`); await ask("Press enter", ""); return; }
   const keyless = await confirm("Is this provider keyless (no API key)?", false);
-  let key = "";
-  let keyEnv = "";
+  let key = "", keyEnv = "";
   if (!keyless) {
     key = (await promptSecret(`  API key ${dim("(enter to skip)")} `)).trim();
     keyEnv = (await ask("Env var name for the key (optional)")).trim();
   }
   const tier = (await ask("Tier (local/optional/recommended)", keyless ? "local" : "optional")).trim().toLowerCase();
   const validTier = ["local", "optional", "recommended", "keyless"].includes(tier) ? tier : "optional";
-
   const models = [];
   stdout.write(`\n${bold("Models")} ${dim("(add at least one; empty id to finish)")}\n`);
   for (;;) {
@@ -486,48 +384,21 @@ export async function addProviderWizard(cfg) {
     models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
     stdout.write(`    ${green("✓")} ${modelId} added\n`);
   }
-  if (models.length === 0) {
-    stdout.write(`  ${yellow("No models added; provider not saved.")}\n`);
-    await ask("Press enter", "");
-    return;
-  }
-
-  cfg.providers[id] = {
-    baseUrl,
-    ...(key ? { key } : {}),
-    ...(keyEnv ? { keyEnv } : {}),
-    models,
-    enabled: true,
-  };
-  // Store tier/keyless as overrides (resolveProviders reads them from the override)
-  cfg.providers[id].tier = validTier;
-  cfg.providers[id].keyless = keyless;
-  cfg.providers[id].label = label;
-  cfg.providers[id].freeTier = true;
-  cfg.providers[id].rpm = 30;
-  cfg.providers[id].note = "custom lane";
-  cfg.providers[id].setup = { url: baseUrl, note: "custom lane" };
-
+  if (models.length === 0) { stdout.write(`  ${yellow("No models added; provider not saved.")}\n`); await ask("Press enter", ""); return; }
+  cfg.providers[id] = { baseUrl, ...(key ? { key } : {}), ...(keyEnv ? { keyEnv } : {}), models, enabled: true, tier: validTier, keyless, label, freeTier: true, rpm: 30, note: "custom lane", setup: { url: baseUrl, note: "custom lane" } };
   persist(cfg);
   stdout.write(`\n${green("✓")} provider ${bold(id)} saved with ${models.length} model(s)\n`);
   await ask("Press enter", "");
 }
 
-/** Add a custom model to an existing provider. */
 export async function addModelWizard(cfg) {
   banner();
   const providers = resolveProviders(cfg);
   stdout.write(`\n${bold("Add model to provider")}\n\n`);
-  for (const [i, p] of providers.entries()) {
-    stdout.write(`  ${bold(String(i + 1).padStart(2))}. ${p.label}\n`);
-  }
+  for (const [i, p] of providers.entries()) stdout.write(`  ${bold(String(i + 1).padStart(2))}. ${p.label}\n`);
   const idx = Number.parseInt(await ask("\nProvider number"), 10) - 1;
   const p = providers[idx];
-  if (!p) {
-    stdout.write(`  ${red("Invalid provider.")}\n`);
-    await ask("Press enter", "");
-    return;
-  }
+  if (!p) { stdout.write(`  ${red("Invalid provider.")}\n`); await ask("Press enter", ""); return; }
   cfg.providers[p.id] = cfg.providers[p.id] || {};
   const modelId = (await ask("Model id")).trim();
   if (!modelId) return;
@@ -536,49 +407,23 @@ export async function addModelWizard(cfg) {
   const vision = await confirm("Supports vision?", false);
   const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("Quality 1-5", "3"), 10) || 3));
   const fast = await confirm("Fast lane?", false);
-
-  // Append to override models list
   const override = cfg.providers[p.id];
-  if (!Array.isArray(override.models)) override.models = (p.models || []).map((m) => ({ ...m }));
-  // Remove providerId/providerLabel/keyless/enabled which are added by shape()
-  for (const m of override.models) {
-    delete m.providerId;
-    delete m.providerLabel;
-    delete m.keyless;
-    delete m.enabled;
-  }
+  if (!Array.isArray(override.models)) override.models = p.models.map((m) => { const { providerId, providerLabel, keyless, enabled, ...rest } = m; return rest; });
   override.models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
   persist(cfg);
   stdout.write(`\n${green("✓")} model ${bold(modelId)} added to ${p.label}\n`);
   await ask("Press enter", "");
 }
 
+// ── settings menu ─────────────────────────────────────────────────────────
 export async function settingsMenu(cfg) {
   for (;;) {
     banner();
-    stdout.write(`
-${bold("Settings")}
-
-  1. Lanes, keys, and models
-  2. Behaviour      ${dim(`enhance=${cfg.enhance} clean=${cfg.cleanOutput}`)}
-  3. Performance    ${dim(`race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}`)}
-  4. Server         ${dim(`${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}`)}
-  5. Routing        ${dim(`keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}`)}
-  6. Updates        ${dim(`auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}`)}
-  7. Add provider   ${dim("create a new lane")}
-  8. Add model      ${dim("add a model to a lane")}
-  9. Show config    ${dim("secrets masked")}
-  10. Save and exit
-  11. Exit without saving
-`);
+    stdout.write(`\n${bold("Settings")}\n\n  1. Lanes, keys, and models\n  2. Behaviour      ${dim(`enhance=${cfg.enhance} clean=${cfg.cleanOutput}`)}\n  3. Performance    ${dim(`race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}`)}\n  4. Server         ${dim(`${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}`)}\n  5. Routing        ${dim(`keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}`)}\n  6. Updates        ${dim(`auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}`)}\n  7. Add provider   ${dim("create a new lane")}\n  8. Add model      ${dim("add a model to a lane")}\n  9. Show config    ${dim("secrets masked")}\n  10. Save and exit\n  11. Exit without saving\n`);
     const choice = await ask("Choice", "10");
-
-    if (choice === "1") {
-      await providerMenu(cfg);
-    } else if (choice === "2") {
-      cfg.enhance = await confirm("Enhance every prompt", cfg.enhance);
-      cfg.cleanOutput = await confirm("Strip filler from non-stream answers", cfg.cleanOutput);
-    } else if (choice === "3") {
+    if (choice === "1") await providerMenu(cfg);
+    else if (choice === "2") { cfg.enhance = await confirm("Enhance every prompt", cfg.enhance); cfg.cleanOutput = await confirm("Strip filler from non-stream answers", cfg.cleanOutput); }
+    else if (choice === "3") {
       cfg.race = Math.min(4, Math.max(1, Number.parseInt(await ask("Lanes raced in parallel", String(cfg.race)), 10) || cfg.race));
       cfg.bestOf = Math.min(4, Math.max(1, Number.parseInt(await ask("Best-of answers for non-stream", String(cfg.bestOf)), 10) || cfg.bestOf));
       cfg.maxAttempts = Math.min(8, Math.max(1, Number.parseInt(await ask("Max lane attempts", String(cfg.maxAttempts)), 10) || cfg.maxAttempts));
@@ -596,27 +441,28 @@ ${bold("Settings")}
       cfg.updates = cfg.updates || {};
       cfg.updates.autoCheck = await confirm("Check for updates on startup", cfg.updates.autoCheck !== false);
       cfg.updates.autoInstall = await confirm("Install updates automatically (restart to apply)", Boolean(cfg.updates.autoInstall));
-      if (await confirm("Check now?", false)) {
-        await showUpdateCheck(cfg);
-        await ask("Press enter", "");
-      }
-    } else if (choice === "7") {
-      await addProviderWizard(cfg);
-    } else if (choice === "8") {
-      await addModelWizard(cfg);
-    } else if (choice === "9") {
-      stdout.write(`\n${JSON.stringify(redact(cfg), null, 2)}\n`);
-      await ask("\nPress enter", "");
-    } else if (choice === "10") {
-      const file = persist(cfg);
-      stdout.write(`\n${green("✓")} saved ${dim(file)}\n`);
-      return cfg;
-    } else if (choice === "11") {
-      return cfg;
-    }
+      if (await confirm("Check now?", false)) { const { showUpdateCheck } = await import("./tui.js"); await showUpdateCheck(cfg); await ask("Press enter", ""); }
+    } else if (choice === "7") await addProviderWizard(cfg);
+    else if (choice === "8") await addModelWizard(cfg);
+    else if (choice === "9") { stdout.write(`\n${JSON.stringify(redact(cfg), null, 2)}\n`); await ask("\nPress enter", ""); }
+    else if (choice === "10") { const file = persist(cfg); stdout.write(`\n${green("✓")} saved ${dim(file)}\n`); return cfg; }
+    else if (choice === "11") return cfg;
   }
 }
 
+// ── showUpdateCheck ───────────────────────────────────────────────────────
+export async function showUpdateCheck(cfg) {
+  const result = await checkLatest();
+  cfg.updates = { ...(cfg.updates || {}), lastCheck: Date.now() };
+  if (!result.ok) { stdout.write(`\n  ${red("✗")} update check failed: ${result.error || result.status}\n`); return result; }
+  if (result.update) {
+    stdout.write(`\n  ${yellow("↑")} a0 v${result.latest} is available ${dim(`(you have v${result.current})`)}\n`);
+    stdout.write(`  ${dim(`Install: npm install -g ${result.packageName}@latest  (or run \`a0 update\`)`)}\n`);
+  } else stdout.write(`\n  ${green("✓")} up to date ${dim(`v${result.current}`)}\n`);
+  return result;
+}
+
+// ── doctor ────────────────────────────────────────────────────────────────
 export async function doctor(cfg) {
   banner();
   const providers = resolveProviders(cfg);
@@ -624,65 +470,160 @@ export async function doctor(cfg) {
   for (const p of providers) {
     const enabled = p.enabled ? green("enabled ") : dim("disabled");
     let verdict = dim("—");
-    if (p.enabled) {
-      const r = await testProvider(p);
-      verdict = r.ok ? green(`ok ${r.ms}ms`) : red(String(r.status));
-    }
+    if (p.enabled) { const r = await testProvider(p); verdict = r.ok ? green(`ok ${r.ms}ms`) : red(String(r.status)); }
     stdout.write(`  ${bold(p.label.padEnd(18))} ${tierLabel(p).padEnd(22)} ${enabled} ${verdict}\n`);
     if (!p.enabled && p.setup?.url) stdout.write(`      ${dim(`key: ${p.setup.url}`)}\n`);
   }
   const enabled = providers.filter((p) => p.enabled);
   const keyed = enabled.filter((p) => p.hasKey).length;
   const keyless = enabled.filter((p) => p.keyless && !p.hasKey).length;
-  stdout.write(`
-${bold("Summary")}
-  lanes enabled   ${enabled.length} (${keyed} keyed, ${keyless} anonymous)
-  enhancement     ${cfg.enhance ? green("on") : yellow("off")}
-  race            ${cfg.race}
-  best-of         ${cfg.bestOf}
-  endpoint        ${cyan(`http://${cfg.host}:${cfg.port}/v1`)}
-`);
+  stdout.write(`\n${bold("Summary")}\n  lanes enabled   ${enabled.length} (${keyed} keyed, ${keyless} anonymous)\n  enhancement     ${cfg.enhance ? green("on") : yellow("off")}\n  race            ${cfg.race}\n  best-of         ${cfg.bestOf}\n  endpoint        ${cyan(`http://${cfg.host}:${cfg.port}/v1`)}\n`);
   await ask("\nPress enter", "");
 }
 
+// ── statusLine ────────────────────────────────────────────────────────────
 export async function statusLine(cfg, providers) {
   const active = providers.filter((p) => p.enabled);
   const keyed = active.filter((p) => p.hasKey).length;
   const anon = active.filter((p) => p.keyless && !p.hasKey).length;
   banner();
-  stdout.write(`
-${bold("Running")}
-  endpoint   ${cyan(`http://${cfg.host}:${cfg.port}/v1`)}
-  api key    ${cfg.token ? mask(cfg.token) : dim("any value (no auth)")}
-  lanes      ${active.length} (${keyed} keyed, ${anon} anonymous)
-  enhance    ${cfg.enhance ? green("on") : yellow("off")}
-  race       ${cfg.race}   best-of ${cfg.bestOf}
-
-${dim("Point Cline, Roo, Continue, Aider, or any OpenAI SDK at the endpoint.")}
-${dim("Press Ctrl-C to stop.")}
-`);
+  stdout.write(`\n${bold("Running")}\n  endpoint   ${cyan(`http://${cfg.host}:${cfg.port}/v1`)}\n  api key    ${cfg.token ? mask(cfg.token) : dim("any value (no auth)")}\n  lanes      ${active.length} (${keyed} keyed, ${anon} anonymous)\n  enhance    ${cfg.enhance ? green("on") : yellow("off")}\n  race       ${cfg.race}   best-of ${cfg.bestOf}\n\n${dim("Point any OpenAI-compatible client at the endpoint above.")}\n${dim("Press Ctrl-C to stop.")}\n`);
 }
 
+// ── full-screen TUI ───────────────────────────────────────────────────────
+const MENU_ITEMS = [
+  { id: "dashboard", label: "Dashboard", icon: "◉", desc: "Overview and status" },
+  { id: "lanes", label: "Lanes", icon: "≡", desc: "Providers and keys" },
+  { id: "models", label: "Models", icon: "◆", desc: "Per-model selection" },
+  { id: "providers", label: "Add Provider", icon: "+", desc: "Add a new lane" },
+  { id: "settings", label: "Settings", icon: "⚙", desc: "All configuration" },
+  { id: "doctor", label: "Doctor", icon: "♥", desc: "Health check" },
+  { id: "update", label: "Update", icon: "↑", desc: "Check for updates" },
+  { id: "quit", label: "Quit", icon: "✕", desc: "Exit a0" },
+];
+
+let menuIndex = 0;
+let currentView = "menu";
+
+function drawBox(r, c, w, h, title = "") {
+  let top = BOX.tl;
+  if (title) {
+    const titleStr = ` ${title} `;
+    const pad = w - 2 - titleStr.length;
+    const leftPad = Math.floor(pad / 2);
+    const rightPad = pad - leftPad;
+    top += "─".repeat(Math.max(0, leftPad)) + titleStr + "─".repeat(Math.max(0, rightPad)) + BOX.tr;
+  } else top += "─".repeat(w - 2) + BOX.tr;
+  writeAt(r, c, top);
+  for (let i = 1; i < h - 1; i++) { writeAt(r + i, c, BOX.v); writeAt(r + i, c + w - 1, BOX.v); }
+  writeAt(r + h - 1, c, BOX.bl + "─".repeat(w - 2) + BOX.br);
+}
+
+function drawStatusBar(items) {
+  const { w, h } = termSize();
+  const bar = items.join("  │  ");
+  writeAt(h, 1, `${ESC}[7m${bar.padEnd(w).slice(0, w)}${RESET}`);
+}
+
+function renderMenu() {
+  const { w, h } = termSize();
+  stdout.write(CLEAR);
+  const title = ` a0 v${VERSION} `;
+  writeAt(1, 1, `${ESC}[1;36m${title.padEnd(w)}${RESET}`);
+  const menuW = 30, menuH = MENU_ITEMS.length + 4, menuR = 3, menuC = 2;
+  drawBox(menuR, menuC, menuW, menuH, "Menu");
+  for (let i = 0; i < MENU_ITEMS.length; i++) {
+    const item = MENU_ITEMS[i];
+    const prefix = i === menuIndex ? "▸ " : "  ";
+    const style = i === menuIndex ? `${ESC}[1;32m` : "";
+    writeAt(menuR + 2 + i, menuC + 1, `${style}${(prefix + item.icon + " " + item.label).padEnd(menuW - 2)}${RESET}`);
+  }
+  const descC = menuC + menuW + 2, descW = w - descC, descH = menuH;
+  drawBox(menuR, descC, descW, descH, "Description");
+  const sel = MENU_ITEMS[menuIndex];
+  writeAt(menuR + 2, descC + 2, `${bold(sel.label)}`);
+  writeAt(menuR + 3, descC + 2, `${dim(sel.desc)}`);
+  const infoR = menuR + menuH + 1, infoH = h - infoR - 1;
+  if (infoH > 4) {
+    drawBox(infoR, 2, w - 2, infoH, "Quick Status");
+    const cfg = globalThis.__a0cfg || {};
+    const providers = resolveProviders(cfg);
+    const active = activeProviders(providers);
+    const keyed = active.filter((p) => p.hasKey).length;
+    const anon = active.filter((p) => p.keyless && !p.hasKey).length;
+    const lines = [
+      `  Endpoint:  ${cyan(`http://${cfg.host || "127.0.0.1"}:${cfg.port || 8082}/v1`)}`,
+      `  Lanes:     ${active.length} enabled (${keyed} keyed, ${anon} anonymous)`,
+      `  Enhance:   ${cfg.enhance ? green("on") : yellow("off")}`,
+      `  Race:      ${cfg.race || 2}   Best-of: ${cfg.bestOf || 1}`,
+      `  Models:    ${providers.reduce((n, p) => n + p.models.length, 0)} total across ${providers.length} providers`,
+    ];
+    for (let i = 0; i < lines.length && i < infoH - 2; i++) writeAt(infoR + 2 + i, 3, lines[i]);
+  }
+  drawStatusBar([`${dim("↑↓")} navigate`, `${dim("Enter")} select`, `${dim("q")} quit`, `${dim("Ctrl+C")} exit`]);
+}
+
+function renderLanes() {
+  const { w, h } = termSize();
+  stdout.write(CLEAR);
+  const cfg = globalThis.__a0cfg || {};
+  const providers = resolveProviders(cfg);
+  writeAt(1, 1, `${ESC}[1;36m  Lanes — providers and keys${" ".repeat(Math.max(0, w - 28))}${RESET}`);
+  const boxH = h - 4;
+  drawBox(3, 1, w, boxH, "Providers");
+  let r = 5;
+  for (const p of providers) {
+    if (r >= 3 + boxH - 1) break;
+    const state = p.enabled ? green("●") : dim("○");
+    const tier = p.tier === "recommended" ? green("rec") : p.tier === "keyless" ? dim("keyless") : p.tier === "local" ? cyan("local") : yellow("opt");
+    const keyInfo = p.hasKey ? dim(`key ${mask(p.key)}`) : p.keyless ? dim("anonymous") : dim("no key");
+    const mc = modelCounts(p);
+    const modelInfo = (p.keyless && !p.hasKey) ? dim(`${mc.total} curated`) : dim(`${mc.enabled}/${mc.total} models`);
+    writeAt(r, 2, `  ${state} ${p.label.padEnd(18)} ${tier.padEnd(10)} ${keyInfo.padEnd(20)} ${modelInfo}`.slice(0, w - 2));
+    r++;
+  }
+  drawStatusBar([`${dim("↑↓")} scroll`, `${dim("Esc")} back`, `${dim("q")} quit`]);
+}
+
+export async function runTUI(cfg) {
+  globalThis.__a0cfg = cfg;
+  if (!tty) { stdout.write(`a0 v${VERSION} — non-interactive. Use 'a0 config' for settings.\n`); return; }
+  stdout.write(ALT_ON + CLEAR);
+  setupRawInput();
+  let needsRedraw = true;
+  setKeyHandler((ev) => {
+    if (ev.type === "key") {
+      if (ev.key === "escape") { if (currentView !== "menu") { currentView = "menu"; needsRedraw = true; } else { cleanup(); process.exit(0); } }
+      else if (ev.key === "\x1b[A") { if (currentView === "menu") { menuIndex = (menuIndex - 1 + MENU_ITEMS.length) % MENU_ITEMS.length; needsRedraw = true; } }
+      else if (ev.key === "\x1b[B") { if (currentView === "menu") { menuIndex = (menuIndex + 1) % MENU_ITEMS.length; needsRedraw = true; } }
+      else if (ev.key === "enter") {
+        if (currentView === "menu") {
+          const item = MENU_ITEMS[menuIndex];
+          if (item.id === "quit") { cleanup(); process.exit(0); }
+          else { currentView = item.id; needsRedraw = true; }
+        }
+      } else if (ev.key === "q" && currentView === "menu") { cleanup(); process.exit(0); }
+    }
+  });
+  const renderLoop = setInterval(() => {
+    if (!needsRedraw) return;
+    needsRedraw = false;
+    if (currentView === "menu") renderMenu();
+    else if (currentView === "lanes") renderLanes();
+    else {
+      stdout.write(CLEAR);
+      writeAt(1, 1, `${ESC}[1;36m  ${currentView}${" ".repeat(40)}${RESET}`);
+      writeAt(3, 2, `${dim("Press Esc to go back")}`);
+      drawStatusBar([`${dim("Esc")} back`, `${dim("q")} quit`]);
+    }
+  }, 50);
+  stdout.on("resize", () => { needsRedraw = true; });
+  await new Promise(() => {});
+}
+
+// ── help ──────────────────────────────────────────────────────────────────
 export function help() {
-  stdout.write(`
-${bold("a0")} ${dim(`v${VERSION}`)} — free-first inference gateway
-
-${bold("Usage")}
-  a0                 start the gateway (runs setup on first launch)
-  a0 setup           guided key + lane setup
-  a0 config          interactive settings (add providers, models, keys)
-  a0 serve           start the gateway
-  a0 doctor          check every lane
-  a0 models          list categories and lanes
-  a0 update          update a0 to the latest npm release
-  a0 version         print version
-
-${bold("Flags")}
-  --port <n>         port (default 8082)
-  --host <addr>      bind address (default 127.0.0.1)
-  --race <n>         lanes raced in parallel (1–4)
-  --no-enhance       disable prompt enhancement
-  --token <secret>   require this bearer token
-  --check            with update: report only, do not install
-`);
+  stdout.write(`\n${bold("a0")} ${dim(`v${VERSION}`)} — OpenAI-compatible inference gateway\n\n${bold("Usage")}\n  a0                 start the gateway (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway\n  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\n${bold("Flags")}\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install\n`);
 }
+
+export default { clear, banner, setupWizard, settingsMenu, doctor, statusLine, modelMenu, addProviderWizard, addModelWizard, promptSecret, help, runTUI, closeInput };

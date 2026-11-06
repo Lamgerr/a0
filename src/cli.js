@@ -5,7 +5,7 @@ import { stdin, stdout } from "node:process";
 import { configExists, configPath, loadConfig, saveConfig, VERSION } from "./config.js";
 import { CATEGORIES, activeProviders, resolveProviders } from "./registry.js";
 import { createServer } from "./server.js";
-import { help, setupWizard, settingsMenu, doctor, statusLine, banner } from "./tui.js";
+import { help, setupWizard, settingsMenu, doctor, statusLine, banner, runTUI } from "./tui.js";
 import { checkLatest, installLatest, maybeCheck } from "./update.js";
 
 const VALUE_FLAGS = new Set(["--port", "--host", "--race", "--token", "--best-of"]);
@@ -200,8 +200,9 @@ async function main() {
     case "--version":
       stdout.write(`${VERSION}\n`);
       return;
-    case "models":
-      listModels(cfg);
+    case "tui":
+      applyFlags(cfg, flags);
+      await runTUI(cfg);
       return;
     case "doctor":
       applyFlags(cfg, flags);
