@@ -1,4 +1,4 @@
-// TUI — full-screen, OpenCode-inspired. Zero dependencies, ANSI only.
+// TUI — full-screen + line-based. Zero dependencies, ANSI only.
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
@@ -7,7 +7,6 @@ import { mask, saveConfig as persist, redact, VERSION } from "./config.js";
 import { applySetupMode, guideLines, modeSummary, optional, recommended } from "./setup.js";
 import { checkLatest, installLatest } from "./update.js";
 
-// ── terminal helpers ──────────────────────────────────────────────────────
 const tty = Boolean(stdout.isTTY);
 const ESC = "\x1b";
 const ALT_ON = `${ESC}[?1049h${ESC}[?25l`;
@@ -19,63 +18,36 @@ const MOUSE_OFF = `${ESC}[?1006l${ESC}[?1015l${ESC}[?1002l${ESC}[?1000l`;
 
 const c = (code) => (s) => tty ? `${ESC}[${code}m${s}${RESET}` : String(s);
 const bold = c("1"); const dim = c("2");
-const fg = {
-  cyan: c("36"), green: c("32"), yellow: c("33"), red: c("31"),
-  blue: c("34"), magenta: c("35"), white: c("37"), gray: c("90"),
-  orange: c("38;5;208"), teal: c("38;5;44"),
-};
-const bg = { blue: c("44"), dark: c("48;5;236"), highlight: c("48;5;24"), sel: c("48;5;60") };
+const fg = { cyan: c("36"), green: c("32"), yellow: c("33"), red: c("31"), blue: c("34"), magenta: c("35"), white: c("37"), gray: c("90") };
 
 const BOX = { tl:"┌", tr:"┐", bl:"└", br:"┘", h:"─", v:"│" };
-
 function termSize() { return { w: stdout.columns || 80, h: stdout.rows || 24 }; }
 function move(r, col) { stdout.write(`${ESC}[${r};${col}H`); }
 function writeAt(r, col, text) { move(r, col); stdout.write(text); }
-function stripAnsi(s) { return s.replace(/\x1b\[[0-9;]*m/g, ""); }
 function truncate(s, w) { return s.length > w ? s.slice(0, w - 1) + "…" : s; }
 
-// ── input handling ────────────────────────────────────────────────────────
-let keyHandler = null;
-let inputBuffer = "";
-
+let keyHandler = null, inputBuffer = "";
 function setupRawInput() {
   if (!stdin.isTTY) return;
-  stdin.setRawMode(true);
-  stdin.resume();
-  stdin.setEncoding("utf8");
+  stdin.setRawMode(true); stdin.resume(); stdin.setEncoding("utf8");
   stdin.on("data", (chunk) => { inputBuffer += chunk; processInput(); });
   stdout.write(MOUSE_ON);
 }
-
 function processInput() {
   while (inputBuffer.length > 0) {
     let consumed = false;
     if (inputBuffer.startsWith("\x1b[<")) {
-      const match = inputBuffer.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
-      if (match) {
-        const btn = parseInt(match[1], 10);
-        const col = parseInt(match[2], 10);
-        const row = parseInt(match[3], 10);
-        const type = match[4] === "M" ? "press" : "release";
-        inputBuffer = inputBuffer.slice(match[0].length);
-        if (keyHandler) keyHandler({ type: "mouse", btn, col, row, action: type });
-        consumed = true;
-      } else break;
+      const m = inputBuffer.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
+      if (m) { inputBuffer = inputBuffer.slice(m[0].length); if (keyHandler) keyHandler({ type: "mouse", btn: +m[1], col: +m[2], row: +m[3], action: m[4] === "M" ? "press" : "release" }); consumed = true; } else break;
     } else if (inputBuffer.startsWith("\x1b[")) {
-      const match = inputBuffer.match(/^\x1b\[[0-9;]*[A-Za-z]/);
-      if (match) {
-        const seq = match[0];
-        inputBuffer = inputBuffer.slice(seq.length);
-        if (keyHandler) keyHandler({ type: "key", key: seq });
-        consumed = true;
-      } else break;
+      const m = inputBuffer.match(/^\x1b\[[0-9;]*[A-Za-z]/);
+      if (m) { inputBuffer = inputBuffer.slice(m[0].length); if (keyHandler) keyHandler({ type: "key", key: m[0] }); consumed = true; } else break;
     } else if (inputBuffer.startsWith("\x1b")) {
       inputBuffer = inputBuffer.slice(1);
       if (keyHandler) keyHandler({ type: "key", key: "escape" });
       consumed = true;
     } else {
-      const ch = inputBuffer[0];
-      inputBuffer = inputBuffer.slice(1);
+      const ch = inputBuffer[0]; inputBuffer = inputBuffer.slice(1);
       if (ch === "\r" || ch === "\n") { if (keyHandler) keyHandler({ type: "key", key: "enter" }); }
       else if (ch === "\t") { if (keyHandler) keyHandler({ type: "key", key: "tab" }); }
       else if (ch === "\x7f" || ch === "\b") { if (keyHandler) keyHandler({ type: "key", key: "backspace" }); }
@@ -86,15 +58,10 @@ function processInput() {
     if (!consumed) break;
   }
 }
+function setKeyHandler(h) { keyHandler = h; }
+function cleanup() { stdout.write(MOUSE_OFF); if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); } stdout.write(ALT_OFF); }
 
-function setKeyHandler(handler) { keyHandler = handler; }
-function cleanup() {
-  stdout.write(MOUSE_OFF);
-  if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); }
-  stdout.write(ALT_OFF);
-}
-
-// ── shared readline for forms ─────────────────────────────────────────────
+// ── shared readline ───────────────────────────────────────────────────────
 let rl = null, lineQueue = [], lineWaiter = null;
 function ensureReader() {
   if (rl) return;
@@ -107,9 +74,7 @@ function readLine() {
   if (lineQueue.length > 0) return Promise.resolve(lineQueue.shift());
   return new Promise((resolve) => { lineWaiter = resolve; });
 }
-export function closeInput() {
-  if (rl) { rl.close(); rl = null; lineQueue.length = 0; lineWaiter = null; }
-}
+export function closeInput() { if (rl) { rl.close(); rl = null; lineQueue.length = 0; lineWaiter = null; } }
 async function ask(question, def = "") {
   const suffix = def !== "" ? dim(` [${def}]`) : "";
   stdout.write(`${question}${suffix}: `);
@@ -141,31 +106,9 @@ export function promptSecret(question) {
   });
 }
 
-// ── drawing primitives ────────────────────────────────────────────────────
+// ── basic helpers ─────────────────────────────────────────────────────────
 export function clear() { if (tty) stdout.write("\x1b[2J\x1b[H"); }
-export function banner() {
-  clear();
-  stdout.write(`\n  a0  v${VERSION}\n  OpenAI-compatible inference gateway\n`);
-}
-function drawBox(r, col, w, h, title = "") {
-  let top = BOX.tl;
-  if (title) {
-    const ts = ` ${title} `;
-    const pad = w - 2 - ts.length;
-    const lp = Math.floor(pad / 2), rp = pad - lp;
-    top += "─".repeat(Math.max(0, lp)) + ts + "─".repeat(Math.max(0, rp)) + BOX.tr;
-  } else top += "─".repeat(w - 2) + BOX.tr;
-  writeAt(r, col, top);
-  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, BOX.v); writeAt(r + i, col + w - 1, BOX.v); }
-  writeAt(r + h - 1, col, BOX.bl + "─".repeat(w - 2) + BOX.br);
-}
-function drawStatusBar(items) {
-  const { w, h } = termSize();
-  const bar = items.join("  │  ");
-  writeAt(h, 1, `${ESC}[7m${bar.padEnd(w).slice(0, w)}${RESET}`);
-}
-
-// ── helpers ───────────────────────────────────────────────────────────────
+export function banner() { clear(); stdout.write(`\n  a0  v${VERSION}\n  OpenAI-compatible inference gateway\n`); }
 function tierLabel(p) {
   if (p.tier === "recommended") return "recommended";
   if (p.tier === "keyless") return "keyless";
@@ -183,10 +126,7 @@ function capLine(p) {
   return caps.join(" · ");
 }
 function providerList(providers) {
-  return providers.map((p, i) => {
-    const n = String(i + 1).padStart(2);
-    return `  ${n}. ${p.enabled ? "●" : "○"} ${p.label.padEnd(18)} ${capLine(p)}`;
-  }).join("\n");
+  return providers.map((p, i) => `  ${String(i + 1).padStart(2)}. ${p.enabled ? "●" : "○"} ${p.label.padEnd(18)} ${capLine(p)}`).join("\n");
 }
 function saveKey(cfg, id, key) { cfg.providers[id] = { ...(cfg.providers[id] || {}), key, enabled: true }; }
 function testProvider(p) {
@@ -196,9 +136,22 @@ function testProvider(p) {
     .then((res) => ({ ok: res.ok, status: res.status, ms: Date.now() - started }))
     .catch((err) => ({ ok: false, status: err.name === "TimeoutError" ? "timeout" : err.message, ms: Date.now() - started }));
 }
+function drawBox(r, col, w, h, title = "") {
+  let top = "┌";
+  if (title) { const ts = ` ${title} `; const pad = w - 2 - ts.length; const lp = Math.floor(pad / 2), rp = pad - lp; top += "─".repeat(Math.max(0, lp)) + ts + "─".repeat(Math.max(0, rp)) + "┐"; }
+  else top += "─".repeat(w - 2) + "┐";
+  writeAt(r, col, top);
+  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, "│"); writeAt(r + i, col + w - 1, "│"); }
+  writeAt(r + h - 1, col, "└" + "─".repeat(w - 2) + "┘");
+}
+function drawStatusBar(items) {
+  const { w, h } = termSize();
+  const bar = items.join("  │  ");
+  writeAt(h, 1, `${ESC}[7m${bar.padEnd(w).slice(0, w)}${RESET}`);
+}
 
 // ── setup wizard ──────────────────────────────────────────────────────────
-export async function setupWizard(cfg) { /* (same as before, condensed) */
+export async function setupWizard(cfg) {
   banner();
   stdout.write(`\nSetup\n\na0 operates in two modes:\n  keyed      provider API keys — better models, higher limits, failover\n  keyless    anonymous free lanes, no signup required\n\nAdd at least two keys for racing and failover. Press enter to skip any key.\n`);
   const providers = resolveProviders(cfg);
@@ -365,33 +318,24 @@ export async function selectProviderUI(cfg, title = "Select provider") {
   let searchQuery = "";
   let selectedIndex = 0;
   let scrollOffset = 0;
-
-  // Enable raw mode for interactive navigation (arrow keys, etc.)
   const wasRaw = stdin.isTTY && stdin.isRaw;
   let dataListener = null;
-  if (stdin.isTTY) {
-    // Always close readline and enable raw mode for the selector
+  if (stdin.isTTY && !stdin.isRaw) {
     closeInput();
-    // Small delay to let readline fully close
-    await new Promise(r => setTimeout(r, 50));
     stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding("utf8");
     dataListener = (chunk) => { inputBuffer += chunk; processInput(); };
     stdin.on("data", dataListener);
   }
-
   function getFiltered() {
     if (!searchQuery) return providers;
     const q = searchQuery.toLowerCase();
     return providers.filter((p) =>
-      p.label.toLowerCase().includes(q) ||
-      p.id.toLowerCase().includes(q) ||
-      (p.tier || "").toLowerCase().includes(q) ||
-      (p.note || "").toLowerCase().includes(q)
+      p.label.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) ||
+      (p.tier || "").toLowerCase().includes(q) || (p.note || "").toLowerCase().includes(q)
     );
   }
-
   return new Promise((resolve) => {
     const render = () => {
       const { w, h } = termSize();
@@ -419,12 +363,11 @@ export async function selectProviderUI(cfg, title = "Select provider") {
       writeAt(h - 2, 2, `${filtered.length} of ${providers.length} providers`.padEnd(w - 2));
       drawStatusBar(["↑↓ navigate", "Enter select", "a add custom", "Esc cancel", "Type search"]);
     };
-
     setKeyHandler((ev) => {
       const filtered = getFiltered();
       if (ev.type === "char") {
         if (ev.char === "a" && !searchQuery) {
-          if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+          if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
           resolve({ type: "add_custom" });
           return;
         }
@@ -434,21 +377,19 @@ export async function selectProviderUI(cfg, title = "Select provider") {
         render();
       } else if (ev.type === "key") {
         if (ev.key === "escape") {
-          if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+          if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
           resolve(null);
-        }
-        else if (ev.key === "\x1b[A") { selectedIndex = Math.max(0, selectedIndex - 1); render(); }
+        } else if (ev.key === "\x1b[A") { selectedIndex = Math.max(0, selectedIndex - 1); render(); }
         else if (ev.key === "\x1b[B") { selectedIndex = Math.min(Math.max(0, filtered.length - 1), selectedIndex + 1); render(); }
         else if (ev.key === "enter") {
           if (filtered.length > 0) {
-            if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+            if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
             resolve({ type: "select", provider: filtered[selectedIndex] });
           }
         } else if (ev.key === "backspace") { searchQuery = searchQuery.slice(0, -1); selectedIndex = 0; scrollOffset = 0; render(); }
         else if (ev.key === " ") { searchQuery += " "; render(); }
       }
     });
-
     render();
   });
 }
@@ -565,7 +506,6 @@ export async function settingsMenu(cfg) {
     } else if (choice === "5") {
       cfg.routing.preferKeyless = await confirm("Prefer keyless lanes", cfg.routing.preferKeyless);
       cfg.routing.sticky = await confirm("Keep one model per session", cfg.routing.sticky);
-      cfg.routing.costOptimize = await confirm("Optimize for cost (prefer cheaper lanes)", cfg.routing.costOptimize !== false);
     } else if (choice === "6") {
       cfg.updates = cfg.updates || {};
       cfg.updates.autoCheck = await confirm("Check for updates on startup", cfg.updates.autoCheck !== false);
@@ -623,26 +563,16 @@ export async function statusLine(cfg, providers) {
 export async function runTUI(cfg) {
   globalThis.__a0cfg = cfg;
   if (!tty) { stdout.write(`a0 v${VERSION} — non-interactive. Use 'a0 config' for settings.\n`); return; }
-
-  // Enter alternate screen
   stdout.write(ALT_ON + CLEAR);
   setupRawInput();
-
   let currentView = "dashboard";
   let menuIndex = 0;
-  let searchQuery = "";
   let needsRedraw = true;
-
   const navItems = ["Dashboard", "Lanes", "Models", "Providers", "Settings", "Doctor", "Update", "Quit"];
-
   function render() {
     const { w, h } = termSize();
     stdout.write(CLEAR);
-
-    // Title bar
     writeAt(1, 1, ` a0 v${VERSION} `.padEnd(w));
-
-    // Sidebar
     const sidebarW = 24;
     drawBox(3, 1, sidebarW, h - 4, "Navigation");
     for (let i = 0; i < navItems.length; i++) {
@@ -650,15 +580,11 @@ export async function runTUI(cfg) {
       const style = menuIndex === i ? "\x1b[1;32m" : "";
       writeAt(4 + i, 2, `${style}${prefix}${navItems[i]}${RESET}`.padEnd(sidebarW - 1));
     }
-
-    // Content area
     const contentX = sidebarW + 2;
     const contentW = w - contentX;
     drawBox(3, contentX, contentW, h - 4, currentView.charAt(0).toUpperCase() + currentView.slice(1));
-
     const providers = resolveProviders(cfg);
     const active = activeProviders(providers);
-
     if (currentView === "dashboard") {
       const lines = [
         `  Endpoint:  http://${cfg.host || "127.0.0.1"}:${cfg.port || 8082}/v1`,
@@ -672,9 +598,7 @@ export async function runTUI(cfg) {
         `  q  quit (from dashboard)`,
         `  Esc  back to dashboard`,
       ];
-      for (let i = 0; i < lines.length && i < h - 8; i++) {
-        writeAt(5 + i, contentX + 2, lines[i]);
-      }
+      for (let i = 0; i < lines.length && i < h - 8; i++) writeAt(5 + i, contentX + 2, lines[i]);
     } else if (currentView === "lanes") {
       let r = 5;
       for (const p of providers) {
@@ -690,11 +614,8 @@ export async function runTUI(cfg) {
     } else {
       writeAt(5, contentX + 2, "Press Esc to go back");
     }
-
-    // Status bar
     drawStatusBar(["↑↓/jk navigate", "Enter/space select", "Esc back", "q quit", "Ctrl+C exit"]);
   }
-
   setKeyHandler((ev) => {
     if (ev.type === "char") {
       if (ev.char === "k") { menuIndex = Math.max(0, menuIndex - 1); render(); }
@@ -714,7 +635,6 @@ export async function runTUI(cfg) {
         else { currentView = item.id; render(); }
       }
     } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
-      // Sidebar click
       if (ev.col >= 2 && ev.col <= 24 && ev.row >= 4 && ev.row < 4 + MENU_ITEMS.length) {
         const idx = ev.row - 4;
         if (idx >= 0 && idx < MENU_ITEMS.length) {
@@ -726,7 +646,6 @@ export async function runTUI(cfg) {
       }
     }
   });
-
   stdout.on("resize", () => render());
   render();
   await new Promise(() => {});
@@ -745,8 +664,7 @@ const MENU_ITEMS = [
 
 // ── help ──────────────────────────────────────────────────────────────────
 export function help() {
-  stdout.write(`\na0 v${VERSION} — OpenAI-compatible inference gateway\n\nUsage\n  a0                 launch management TUI (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway (foreground)\n  a0 start           start the gateway as a background daemon\n  a0 stop            stop the background daemon\n  a0 restart         restart the background daemon\n  a0 status          show daemon status\n  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\nFlags\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install
-  --serve            start the gateway server instead of the TUI\n`);
+  stdout.write(`\na0 v${VERSION} — OpenAI-compatible inference gateway\n\nUsage\n  a0                 launch management TUI (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway (foreground)\n  a0 start           start the gateway as a background daemon\n  a0 stop            stop the background daemon\n  a0 restart         restart the background daemon\n  a0 status          show daemon status\n  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\nFlags\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install\n  --serve            start the gateway server instead of the TUI\n`);
 }
 
 export default { clear, banner, setupWizard, settingsMenu, doctor, statusLine, modelMenu, addProviderWizard, addModelWizard, promptSecret, help, runTUI, closeInput, selectProviderUI };

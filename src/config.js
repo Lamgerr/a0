@@ -5,7 +5,7 @@ import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.3.1";
 
 // Shared keep-alive agents for upstream connections. Reusing TCP connections
 // across requests avoids the ~50-100ms connection setup overhead per lane.
@@ -21,20 +21,68 @@ export const DEFAULTS = {
   port: 8082,
   host: "127.0.0.1",
   token: "",
+  // ── Enhancement ──
   enhance: true,
   cleanOutput: true,
+  enhanceDepth: "standard", // minimal, standard, thorough
+  systemPrompt: "", // custom system prompt override (empty = use a0's contract)
+  // ── Performance ──
   race: 2, // lanes dispatched in parallel per request (1 = plain failover)
   bestOf: 1, // non-stream only: collect N answers, pick the best
   maxAttempts: 3,
   requestTimeoutMs: 90_000,
   firstByteTimeoutMs: 25_000,
   maxBodyBytes: 16 * 1024 * 1024,
+  maxOutputTokens: 0, // 0 = provider default
+  concurrency: 0, // 0 = unlimited
+  // ── Routing ──
   routing: {
     preferKeyless: false,
     sticky: true,
     longContextTokens: 24_000,
     costOptimize: true,
+    difficultyThreshold: 2, // min difficulty for reasoning lanes
+    visionRouting: true,
+    toolRouting: true,
+    fallbackOnError: true,
   },
+  // ── Server ──
+  server: {
+    cors: true,
+    maxConnections: 0, // 0 = unlimited
+    keepAlive: true,
+    compression: false,
+  },
+  // ── Cache ──
+  cache: {
+    enabled: true,
+    ttlMs: 300_000, // 5 minutes
+    maxSize: 100,
+    cacheStream: false,
+  },
+  // ── Output ──
+  output: {
+    format: "text", // text, json, markdown
+    stripMarkdown: false,
+    maxTokens: 0, // 0 = provider default
+  },
+  // ── Logging ──
+  logging: {
+    level: "info", // debug, info, warn, error
+    logRequests: true,
+    logFile: "",
+    metrics: false,
+  },
+  // ── Advanced ──
+  advanced: {
+    retryPolicy: "failover", // failover, retry, none
+    retryDelayMs: 1000,
+    circuitBreaker: true,
+    circuitBreakerThreshold: 5,
+    rateLimitPerMinute: 0, // 0 = unlimited
+    customHeaders: {},
+  },
+  // ── Updates ──
   updates: {
     autoCheck: true,
     autoInstall: false,
