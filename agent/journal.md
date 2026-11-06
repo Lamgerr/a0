@@ -30,3 +30,37 @@
 - Security lints: pre-existing rls_auto_enable() SECURITY DEFINER callable by anon/authenticated → revoked EXECUTE from anon+authenticated, kept postgres/service_role. Panels lint re-run for confirmation later.
 - dashboard/.env.local with VITE_SUPABASE_* → build bakes URL (ENV_BAKED_OK). .gitignore now covers **/.env.local (!.env.example). Pushed 5d1f74e6.
 - TODO: create a test user via auth signup to validate RLS policies round-trip; supabase auth email templates still default.
+
+## 2026-11-06 — pivot: provider, not agent; Node rewrite; v0.1 runs
+
+**What changed.** The user rejected the terminal-agent reading and re-scoped a0 to a local,
+free-first OpenAI-compatible provider with a TUI setup screen, distributed via npm, no auth,
+no hosted instance. Then asked to start coding. `docs/a0-brief.md` is the canonical brief.
+
+**Why Node, not Go.** `go` is not installed in this environment, and npm is the stated
+delivery channel. A Go core behind an npm wrapper would need a platform-binary matrix and
+could not be built or tested here. Zero-dependency ESM on Node 18+ ships as plain JS, runs
+from `npx`, and lets the TUI be trivial. The old Go relay/lane/alias logic was used as a
+reference for semantics, not copied.
+
+**What was built.** config, provider registry, request classifier, idempotent prompt
+enhancer, capability router, racing relay (stream race + non-stream best-of + failover),
+OpenAI-wire HTTP server, TUI, CLI, tests, README, MIT license. 28 tests pass.
+
+**Calls I made (challenge if wrong).**
+- Enhancement is on by default and merges into the first system message; idempotent via a
+  marker. This is the answer to the earlier "transparent proxy?" question: a0 does modify.
+- `race=2` by default: two lanes in parallel, first usable first byte wins, loser aborted.
+  Best-of defaults to 1 because fan-out multiplies free-tier quota burn.
+- Capability gates are hard. No tool call to a chat-only lane; no image to a text-only lane.
+  If nothing eligible exists, return a named error that tells the user which key to add.
+- Streaming is the contract. No retry after bytes are sent; in-band error if a stream breaks.
+- Terse output is enforced by the contract and a conservative non-stream cleaner.
+- Loopback default; a token is generated automatically when binding beyond loopback.
+- MIT for adoption. Package name still unresolved (npm `a0` may be taken).
+
+**Verified.** Unit + fake-upstream e2e tests; live keyless smoke against LLM7 (non-stream
+completion ~2.8s, SSE streaming passthrough for `a0/code`); CLI help/models/version.
+
+**Next.** Session stickiness, persisted lane health, community skill pack, npm publish prep,
+then delete legacy Go/dashboard. Blocked: npm account/name and real provider keys.

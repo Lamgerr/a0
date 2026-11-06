@@ -67,9 +67,10 @@ quota burned, less noise for the client.
 
 ## Agentic skill pack
 
-Ship a small, versioned set of markdown skills — plan, debug, refactor, test, review, scaffold —
-loaded on demand and injected into the request. Community-contributable, reviewed for token
-cost; every skill must earn its tokens. Skills encode procedure, not prose.
+v0.1 ships the core operating contract (terseness, grounding, one-question limit, tool-call
+discipline). The next step is a small, versioned set of markdown skills — plan, debug,
+refactor, test, review, scaffold — loaded on demand. Community-contributable, reviewed for
+token cost; every skill must earn its tokens. Skills encode procedure, not prose.
 
 ## Reliability contract
 
@@ -87,15 +88,21 @@ cost; every skill must earn its tokens. Skills encode procedure, not prose.
 
 ## Build constraints
 
-- Reuse a0's Go `internal/relay`, `internal/lane`, `internal/alias`. Delete the dashboard,
-  Supabase, node registry, auth, and guard.
-- One static binary. No runtime dependency beyond npm for delivery.
+- Node 18+ ESM, **zero runtime dependencies**. Distribution is a plain npm package with a
+  `bin` entry; no platform binaries, no postinstall download.
 - The lane registry is data, community-maintained. Code never hardcodes secrets.
-- Deterministic config; everything overridable by environment variables.
+- Deterministic config at `~/.a0/config.json` (`0600`); everything overridable by env.
+- The old Go gateway and React dashboard are reference only. They are deleted once the Node
+  implementation reaches parity.
 
 ## Decisions taken (challenge these, do not silently drift)
 
+- a0 **does** modify requests: it merges an operating contract into the system message on
+  every call, idempotently, and it can be disabled.
 - Streaming is the contract. Quality retries happen only before the first token.
+- `race=2` by default: two lanes in parallel, first usable byte wins, loser aborted.
+- Best-of is available for non-stream calls but defaults to off — it multiplies quota burn.
 - Terse by default is non-negotiable — it is both UX and quota strategy.
 - Model swapping happens between sessions, not mid-turn.
-- Fast lane first; strong lane on escalation.
+- No auth by default; a token is generated automatically when binding beyond loopback.
+- MIT license.

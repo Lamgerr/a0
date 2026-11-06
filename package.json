@@ -1,0 +1,32 @@
+{
+  "name": "a0",
+  "version": "0.1.0",
+  "description": "Free-first, self-hosted OpenAI-compatible inference gateway with a routing brain",
+  "type": "module",
+  "bin": {
+    "a0": "bin/a0.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node bin/a0.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "llm",
+    "openai",
+    "gateway",
+    "free",
+    "self-hosted",
+    "coding-agent",
+    "router"
+  ],
+  "license": "MIT",
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "docs/a0-brief.md"
+  ]
+}

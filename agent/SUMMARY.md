@@ -1,20 +1,39 @@
-# a0 — what happened while you were away (2026-10-18)
+# a0 — what happened while you were away (2026-11-06)
 
 ## DONE
-- **M1 merged to main** (7b0bef5) — Go gateway: lane/alias/relay/server, review fixes, tag `m1-core`.
-- **Dashboard transplanted to the SquidCloud design system** per your call: copied the cloudbliss UI shell (Lovable stack — Vite + React + Tailwind + shadcn + react-query + recharts), stripped all its pages/business components (kept the 66-piece `components/ui` + motion kit), and built a0 on top:
-  - Landing (`/`) — hero, categories grid, copyable curl, "a0 — a squidcloud product"
-  - Auth (`/auth`) — Supabase email signin/signup
-  - Control panel (`/dashboard/*`) — Overview, API Keys (mint/revoke, secret shown once, hashed at rest), Usage (charts), Models (category chains), Nodes (mint one-time NODE_ID + CONTROL_TOKEN env for wing bootstrap)
-  - Env-gated Supabase client: no creds yet → everything stays browsable with demo data instead of crashing
-- **Supabase migration ready**: `supabase/migrations/0001_control_plane.sql` — virtual_keys (sha256+prefix), usage_events (tenant-scoped RLS), lane_health (public read), node registry. 
-- All pushed to main: `080f06d`, `b66eb2c`. `tsc` clean, production build green, dev server verified on :8080.
 
-## BLOCKED — needs a decision/input
-- **Supabase project unreachable via my MCP tools (0 orgs / 0 projects visible).** To wire the control plane live I need either: (a) the URL + anon key of your `a00` project (paste or set as Vercel env), and/or (b) access/invitation to that project's organization. The SQL migration then applies in one step. No money needs to be spent unless you want me to create a new project.
+**The pivot is real and v0.1 runs.** a0 is now a local, free-first, OpenAI-compatible
+inference gateway — a provider, not an agent, not a hosted service.
+
+- **Zero-dependency Node 18+ ESM package.** Go toolchain isn't installed here, and npm is the
+  delivery target, so rewriting the core in Node was the only path that could actually be
+  built and tested. Old Go gateway + React dashboard are untouched legacy, to delete at parity.
+- **Shipped modules:** `config` (0600 JSON), `registry` (lanes as data), `classify` (vision /
+  tools / long-context / difficulty), `enhance` (idempotent operating contract on every
+  request), `router` (hard capability gates + scoring + provider diversity), `relay`
+  (streaming race + non-stream best-of + failover), `server` (OpenAI wire, SSE, CORS,
+  optional token), `tui` (setup / settings / lanes / doctor), `cli`.
+- **28 tests green**, including fake-upstream failover, streaming race, best-of selection,
+  enhancement idempotency, capability routing, auth, and config permissions.
+- **Live smoke passed:** keyless default pool returned a completion in ~2.8s through LLM7;
+  `a0/code` SSE streaming passed through chunk-by-chunk.
+- **Docs:** `README.md`, `docs/a0-brief.md`, MIT `LICENSE`.
+
+## IN PROGRESS
+
+- Session stickiness (one model per client session) is a config flag, not yet enforced.
+- Lane health/cooldown is per-process only; nothing persists between runs.
+
+## BLOCKED — needs a human
+
+- **npm publish.** Needs account access and a final name. `a0` is short and likely taken;
+  decide between the bare name, `a0-cli`, or a scope.
+- **Keyed lanes.** Groq / Gemini / OpenRouter / xKiro are wired but unverified without keys.
 
 ## QUEUED NEXT
-1. Apply `0001_control_plane.sql` to a reachable Supabase project; set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
-2. M4: node registry wiring (panel heartbeat endpoints) + gateway auth-side 60s key cache from Supabase.
-3. Vercel deploy of `dashboard/`.
-4. M2 leftovers deferred from the review list (probe caching, ctx cancel, Retry-After polish).
+
+1. Community skill pack (plan, debug, refactor, test, review, scaffold), loaded on demand.
+2. Session stickiness + persisted lane health/cooldown.
+3. Live status view in the TUI while the server runs.
+4. Parity check, then delete the legacy Go/dashboard tree.
+5. Publish to npm with a one-command `npx a0` install.

@@ -1,6 +1,11 @@
 .env
 models.json
 
+# node
+node_modules/
+*.log
+.a0/
+
 # dashboard build artifacts
 dashboard/dist/
 dashboard/node_modules/

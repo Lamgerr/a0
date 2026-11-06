@@ -1,12 +1,30 @@
 {
- "goal": "a0: public pooled free-lane OpenAI-compatible gateway (Go) + React/Supabase dashboard",
- "status": "M1 merged to main; M2 dashboard built + pushed (080f06d,b66eb2c); waiting on Supabase project env to wire control plane",
- "last_actions": [
-  "design-system transplant from cloudbliss (squidcloud)",
-  "a0 pages: landing auth overview keys usage models nodes",
-  "vite plugin react (android-safe) marked on config",
-  "0001_control_plane.sql w/ RLS ready"
- ],
- "next": "user supplies VITE_SUPABASE_URL/ANON + applies 0001 (supabase MCP has no org) \u2192 then M4 node registry + gateway auth cache",
- "blocked": "no Supabase project reachable via MCP (0 orgs). Spending needs user."
+  "goal": "a0 v0.1 — free-first, zero-dependency Node/ESM OpenAI-compatible gateway. Local, self-hosted, no auth service, no hosted instance. npm distribution. Pools keyless free lanes, enhances every prompt, routes by capability, races lanes in parallel.",
+  "status": "v0.1 vertical slice implemented and tested: config, provider registry, classifier, prompt enhancer, router, racing relay (stream + best-of), HTTP server, TUI, CLI, 28 tests green, live smoke against LLM7 keyless passed.",
+  "last_actions": [
+    "pivoted product from public multi-tenant service to local self-hosted npm gateway",
+    "wrote docs/a0-brief.md (master brief) and README.md",
+    "chose Node 18+ ESM with zero runtime deps (Go toolchain absent; npm is the target)",
+    "built src/config.js, registry.js, classify.js, enhance.js, router.js, relay.js, server.js, tui.js, cli.js",
+    "built bin/a0.js, package.json, LICENSE (MIT), test suite",
+    "live-tested: /v1/models, non-stream completion, SSE streaming via keyless LLM7"
+  ],
+  "next": [
+    "publish prep: confirm npm name availability for 'a0' (may be taken; fall back to a scoped name or a0-cli)",
+    "add the community skill pack (plan/debug/refactor/test/review/scaffold) as versioned markdown loaded on demand",
+    "add session stickiness keyed by client/session id (currently model choice is per request)",
+    "add lane health probing + cooldown persistence (registry of dead lanes)",
+    "add a real TUI status view while the server runs (currently the TUI is setup/config)",
+    "delete the legacy Go gateway and React dashboard once parity is confirmed"
+  ],
+  "blocked": "npm publish needs a human: account access and final package name. Real keyed-lane verification (Groq/Gemini/OpenRouter/xKiro) needs the user's keys.",
+  "decisions": [
+    "a0 is a provider, not an agent: clients own the agent loop",
+    "a0 modifies every request with an idempotent operating contract (enhancement is on by default)",
+    "capability gates are hard: no tools to chat-only lanes, no images to text-only lanes",
+    "race=2 by default (first usable byte wins, loser aborted); best-of available for non-stream, default off",
+    "streaming is the contract; no retry after bytes are sent",
+    "loopback by default; a token is auto-generated when binding beyond loopback",
+    "MIT license"
+  ]
 }
