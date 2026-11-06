@@ -1,5 +1,4 @@
 // TUI — full-screen, OpenCode-inspired. Zero dependencies, ANSI only.
-// Uses alternate screen buffer. Mouse + keyboard navigation.
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
@@ -23,9 +22,9 @@ const bold = c("1"); const dim = c("2");
 const fg = {
   cyan: c("36"), green: c("32"), yellow: c("33"), red: c("31"),
   blue: c("34"), magenta: c("35"), white: c("37"), gray: c("90"),
-  orange: c("38;5;208"),
+  orange: c("38;5;208"), teal: c("38;5;44"),
 };
-const bg = { blue: c("44"), dark: c("48;5;236"), highlight: c("48;5;24") };
+const bg = { blue: c("44"), dark: c("48;5;236"), highlight: c("48;5;24"), sel: c("48;5;60") };
 
 const BOX = { tl:"┌", tr:"┐", bl:"└", br:"┘", h:"─", v:"│" };
 
@@ -33,6 +32,7 @@ function termSize() { return { w: stdout.columns || 80, h: stdout.rows || 24 }; 
 function move(r, col) { stdout.write(`${ESC}[${r};${col}H`); }
 function writeAt(r, col, text) { move(r, col); stdout.write(text); }
 function stripAnsi(s) { return s.replace(/\x1b\[[0-9;]*m/g, ""); }
+function truncate(s, w) { return s.length > w ? s.slice(0, w - 1) + "…" : s; }
 
 // ── input handling ────────────────────────────────────────────────────────
 let keyHandler = null;
@@ -147,8 +147,7 @@ export function banner() {
   clear();
   stdout.write(`\n${bold(fg.cyan("  a0"))} ${dim(`v${VERSION}`)}\n${dim("  OpenAI-compatible inference gateway")}\n`);
 }
-
-function drawBox(r, col, w, h, title = "", colorFn = (s) => s) {
+function drawBox(r, col, w, h, title = "") {
   let top = BOX.tl;
   if (title) {
     const ts = ` ${title} `;
@@ -156,20 +155,17 @@ function drawBox(r, col, w, h, title = "", colorFn = (s) => s) {
     const lp = Math.floor(pad / 2), rp = pad - lp;
     top += "─".repeat(Math.max(0, lp)) + ts + "─".repeat(Math.max(0, rp)) + BOX.tr;
   } else top += "─".repeat(w - 2) + BOX.tr;
-  writeAt(r, col, colorFn(top));
-  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, colorFn(BOX.v)); writeAt(r + i, col + w - 1, colorFn(BOX.v)); }
-  writeAt(r + h - 1, col, colorFn(BOX.bl + "─".repeat(w - 2) + BOX.br));
+  writeAt(r, col, top);
+  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, BOX.v); writeAt(r + i, col + w - 1, BOX.v); }
+  writeAt(r + h - 1, col, BOX.bl + "─".repeat(w - 2) + BOX.br);
 }
-
 function drawStatusBar(items) {
   const { w, h } = termSize();
   const bar = items.join("  │  ");
   writeAt(h, 1, `${ESC}[7m${bar.padEnd(w).slice(0, w)}${RESET}`);
 }
 
-function drawHLine(r, col, w, ch = "─") { writeAt(r, col, ch.repeat(w)); }
-
-// ── tier helpers ──────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────
 function tierLabel(p) {
   if (p.tier === "recommended") return fg.green("recommended");
   if (p.tier === "keyless") return dim("keyless");
@@ -199,6 +195,148 @@ function testProvider(p) {
   return fetch(url, { signal: AbortSignal.timeout(8000), headers: p.key ? { authorization: `Bearer ${p.key}` } : {} })
     .then((res) => ({ ok: res.ok, status: res.status, ms: Date.now() - started }))
     .catch((err) => ({ ok: false, status: err.name === "TimeoutError" ? "timeout" : err.message, ms: Date.now() - started }));
+}
+
+// ── searchable provider selector ──────────────────────────────────────────
+// Returns selected provider object or null (if cancelled / add custom)
+export async function selectProviderUI(cfg, title = "Select provider") {
+  const providers = resolveProviders(cfg);
+  let searchQuery = "";
+  let selectedIndex = 0;
+  let scrollOffset = 0;
+  const pageSize = () => termSize().h - 8;
+
+  function getFiltered() {
+    if (!searchQuery) return providers;
+    const q = searchQuery.toLowerCase();
+    return providers.filter((p) => p.label.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || (p.tier || "").toLowerCase().includes(q));
+  }
+
+  return new Promise((resolve) => {
+    const render = () => {
+      const { w, h } = termSize();
+      stdout.write(CLEAR);
+      writeAt(1, 1, `${ESC}[1;36m  ${title}${" ".repeat(Math.max(0, w - title.length - 4))}${RESET}`);
+      writeAt(2, 2, `${dim("Type to search · ↑↓ navigate · Enter select · a add custom · Esc cancel")}`);
+
+      const filtered = getFiltered();
+      if (selectedIndex >= filtered.length) selectedIndex = Math.max(0, filtered.length - 1);
+
+      // Search bar
+      const searchLine = `  Search: ${searchQuery}█`;
+      writeAt(4, 2, searchLine.padEnd(w - 2));
+
+      // Provider list
+      const listStart = 6;
+      const visibleCount = h - listStart - 2;
+      if (selectedIndex < scrollOffset) scrollOffset = selectedIndex;
+      if (selectedIndex >= scrollOffset + visibleCount) scrollOffset = selectedIndex - visibleCount + 1;
+
+      for (let i = 0; i < visibleCount && i + scrollOffset < filtered.length; i++) {
+        const idx = i + scrollOffset;
+        const p = filtered[idx];
+        const isSelected = idx === selectedIndex;
+        const prefix = isSelected ? "▸ " : "  ";
+        const style = isSelected ? `${ESC}[1;32m` : "";
+        const state = p.enabled ? fg.green("●") : dim("○");
+        const tier = p.tier === "recommended" ? fg.green("rec") : p.tier === "keyless" ? dim("key") : p.tier === "local" ? fg.cyan("loc") : fg.yellow("opt");
+        const line = `${prefix}${state} ${p.label.padEnd(20)} ${tier.padEnd(12)} ${dim(p.baseUrl.replace(/^https?:\/\//, "").slice(0, 30))}`;
+        writeAt(listStart + i, 2, `${style}${truncate(line, w - 4)}${RESET}`);
+      }
+
+      // Footer
+      writeAt(h - 1, 2, `${dim(`${filtered.length} providers · ${searchQuery ? "filtered" : "all"}`)}`);
+      drawStatusBar([`${dim("↑↓")} navigate`, `${dim("Enter")} select`, `${dim("a")} add custom`, `${dim("Esc")} cancel`, `${dim("Type")} search`]);
+    };
+
+    const cleanupUI = () => {
+      cleanup();
+      // Restore line-based input
+    };
+
+    setKeyHandler((ev) => {
+      const filtered = getFiltered();
+      if (ev.type === "char") {
+        if (ev.char === "a" && !searchQuery) {
+          // Add custom provider
+          cleanupUI();
+          resolve({ type: "add_custom" });
+          return;
+        }
+        searchQuery += ev.char;
+        selectedIndex = 0;
+        scrollOffset = 0;
+        render();
+      } else if (ev.type === "key") {
+        if (ev.key === "escape") {
+          cleanupUI();
+          resolve(null);
+        } else if (ev.key === "\x1b[A") { // up
+          selectedIndex = Math.max(0, selectedIndex - 1);
+          render();
+        } else if (ev.key === "\x1b[B") { // down
+          selectedIndex = Math.min(filtered.length - 1, selectedIndex + 1);
+          render();
+        } else if (ev.key === "enter") {
+          if (filtered.length > 0) {
+            cleanupUI();
+            resolve({ type: "select", provider: filtered[selectedIndex] });
+          }
+        } else if (ev.key === "backspace") {
+          searchQuery = searchQuery.slice(0, -1);
+          selectedIndex = 0;
+          scrollOffset = 0;
+          render();
+        } else if (ev.key === " ") {
+          searchQuery += " ";
+          render();
+        }
+      } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
+        const listStart = 6;
+        const visibleCount = termSize().h - listStart - 2;
+        if (ev.row >= listStart && ev.row < listStart + visibleCount) {
+          const idx = ev.row - listStart + scrollOffset;
+          if (idx >= 0 && idx < filtered.length) {
+            selectedIndex = idx;
+            render();
+          }
+        }
+      } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0 && ev.row === termSize().h - 1) {
+        // Double-click to select
+      }
+    });
+
+    // Double-click detection
+    let lastClick = 0;
+    const origHandler = keyHandler;
+    // Override to handle double-click
+    setKeyHandler((ev) => {
+      if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
+        const now = Date.now();
+        const listStart = 6;
+        const visibleCount = termSize().h - listStart - 2;
+        if (ev.row >= listStart && ev.row < listStart + visibleCount) {
+          const idx = ev.row - listStart + scrollOffset;
+          const filtered = getFiltered();
+          if (idx >= 0 && idx < filtered.length) {
+            if (now - lastClick < 400 && idx === selectedIndex) {
+              // Double click - select
+              cleanupUI();
+              resolve({ type: "select", provider: filtered[idx] });
+              return;
+            }
+            selectedIndex = idx;
+            lastClick = now;
+            render();
+            return;
+          }
+        }
+      }
+      origHandler(ev);
+    });
+
+    render();
+  });
 }
 
 // ── setup wizard ──────────────────────────────────────────────────────────
@@ -363,53 +501,88 @@ export async function providerMenu(cfg) {
   }
 }
 
-// ── add provider/model wizards ────────────────────────────────────────────
+// ── add provider wizard (using searchable selector) ────────────────────────
 export async function addProviderWizard(cfg) {
+  // Use the searchable provider selector
+  const result = await selectProviderUI(cfg, "Add provider");
+  if (!result) return; // cancelled
+
+  if (result.type === "add_custom") {
+    // Custom provider flow
+    banner();
+    stdout.write(`\n${bold("Add custom provider")}\n\n`);
+    const id = (await ask("Provider id (slug, lowercase)")).trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    if (!id) return;
+    if (cfg.providers[id]) { stdout.write(`  ${fg.yellow("Provider")} ${bold(id)} ${fg.yellow("already exists.")}\n`); await ask("Press enter", ""); return; }
+    const label = (await ask("Display name", id)) || id;
+    const baseUrl = (await ask("Base URL (OpenAI-compatible)")).trim().replace(/\/+$/, "");
+    if (!baseUrl) { stdout.write(`  ${fg.red("Base URL is required.")}\n`); await ask("Press enter", ""); return; }
+    const keyless = await confirm("Is this provider keyless (no API key)?", false);
+    let key = "", keyEnv = "";
+    if (!keyless) {
+      key = (await promptSecret(`  API key ${dim("(enter to skip)")} `)).trim();
+      keyEnv = (await ask("Env var name for the key (optional)")).trim();
+    }
+    const tier = (await ask("Tier (local/optional/recommended)", keyless ? "local" : "optional")).trim().toLowerCase();
+    const validTier = ["local", "optional", "recommended", "keyless"].includes(tier) ? tier : "optional";
+    const models = [];
+    stdout.write(`\n${bold("Models")} ${dim("(add at least one; empty id to finish)")}\n`);
+    for (;;) {
+      const modelId = (await ask("  Model id")).trim();
+      if (!modelId) break;
+      const context = Number.parseInt(await ask("    Context tokens", "32000"), 10) || 32000;
+      const tools = await confirm("    Supports tool calls?", true);
+      const vision = await confirm("    Supports vision?", false);
+      const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("    Quality 1-5", "3"), 10) || 3));
+      const fast = await confirm("    Fast lane?", false);
+      models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
+      stdout.write(`    ${fg.green("✓")} ${modelId} added\n`);
+    }
+    if (models.length === 0) { stdout.write(`  ${fg.yellow("No models added; provider not saved.")}\n`); await ask("Press enter", ""); return; }
+    cfg.providers[id] = { baseUrl, ...(key ? { key } : {}), ...(keyEnv ? { keyEnv } : {}), models, enabled: true, tier: validTier, keyless, label, freeTier: true, rpm: 30, note: "custom lane", setup: { url: baseUrl, note: "custom lane" } };
+    persist(cfg);
+    stdout.write(`\n${fg.green("✓")} provider ${bold(id)} saved with ${models.length} model(s)\n`);
+    await ask("Press enter", "");
+    return;
+  }
+
+  // Selected an existing provider - configure it
+  const p = result.provider;
   banner();
-  stdout.write(`\n${bold("Add provider")}\n\n`);
-  const id = (await ask("Provider id (slug, lowercase)")).trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  if (!id) return;
-  if (cfg.providers[id]) { stdout.write(`  ${fg.yellow("Provider")} ${bold(id)} ${fg.yellow("already exists.")}\n`); await ask("Press enter", ""); return; }
-  const label = (await ask("Display name", id)) || id;
-  const baseUrl = (await ask("Base URL (OpenAI-compatible)")).trim().replace(/\/+$/, "");
-  if (!baseUrl) { stdout.write(`  ${fg.red("Base URL is required.")}\n`); await ask("Press enter", ""); return; }
-  const keyless = await confirm("Is this provider keyless (no API key)?", false);
-  let key = "", keyEnv = "";
-  if (!keyless) {
-    key = (await promptSecret(`  API key ${dim("(enter to skip)")} `)).trim();
-    keyEnv = (await ask("Env var name for the key (optional)")).trim();
+  stdout.write(`\n${bold(p.label)}  ${tierLabel(p)}\n\n`);
+  stdout.write(`  ${dim("Base URL:")} ${p.baseUrl}\n`);
+  stdout.write(`  ${dim("Status:")}   ${p.enabled ? fg.green("enabled") : dim("disabled")}\n`);
+  stdout.write(`  ${dim("Key:")}      ${p.hasKey ? mask(p.key) : dim("none")}\n`);
+  stdout.write(`  ${dim("Models:")}   ${modelCounts(p).enabled}/${modelCounts(p).total}\n\n`);
+  for (const line of guideLines(p)) stdout.write(`  ${dim(line)}\n`);
+  stdout.write("\n");
+
+  const action = await ask("Action (key/toggle/models/test/back)", "back");
+  cfg.providers[p.id] = cfg.providers[p.id] || {};
+  if (action === "key" || action === "k") {
+    const key = (await promptSecret(`  ${p.label} API key ${p.hasKey ? `(current ${mask(p.key)})` : ""}: `)).trim();
+    if (key) { saveKey(cfg, p.id, key); persist(cfg); stdout.write(`  ${fg.green("✓")} key saved\n`); }
+  } else if (action === "toggle" || action === "t") {
+    cfg.providers[p.id].enabled = !p.enabled;
+    persist(cfg);
+    stdout.write(`  ${fg.green("✓")} ${cfg.providers[p.id].enabled ? "enabled" : "disabled"}\n`);
+  } else if (action === "models" || action === "m") {
+    await modelMenu(cfg, p);
+  } else if (action === "test") {
+    const r = await testProvider(p);
+    stdout.write(`  ${r.ok ? fg.green("✓ reachable") : fg.red(`✗ ${r.status}`)} ${dim(`${r.ms}ms`)}\n`);
   }
-  const tier = (await ask("Tier (local/optional/recommended)", keyless ? "local" : "optional")).trim().toLowerCase();
-  const validTier = ["local", "optional", "recommended", "keyless"].includes(tier) ? tier : "optional";
-  const models = [];
-  stdout.write(`\n${bold("Models")} ${dim("(add at least one; empty id to finish)")}\n`);
-  for (;;) {
-    const modelId = (await ask("  Model id")).trim();
-    if (!modelId) break;
-    const context = Number.parseInt(await ask("    Context tokens", "32000"), 10) || 32000;
-    const tools = await confirm("    Supports tool calls?", true);
-    const vision = await confirm("    Supports vision?", false);
-    const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("    Quality 1-5", "3"), 10) || 3));
-    const fast = await confirm("    Fast lane?", false);
-    models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
-    stdout.write(`    ${fg.green("✓")} ${modelId} added\n`);
-  }
-  if (models.length === 0) { stdout.write(`  ${fg.yellow("No models added; provider not saved.")}\n`); await ask("Press enter", ""); return; }
-  cfg.providers[id] = { baseUrl, ...(key ? { key } : {}), ...(keyEnv ? { keyEnv } : {}), models, enabled: true, tier: validTier, keyless, label, freeTier: true, rpm: 30, note: "custom lane", setup: { url: baseUrl, note: "custom lane" } };
-  persist(cfg);
-  stdout.write(`\n${fg.green("✓")} provider ${bold(id)} saved with ${models.length} model(s)\n`);
   await ask("Press enter", "");
 }
 
 export async function addModelWizard(cfg) {
-  banner();
-  const providers = resolveProviders(cfg);
-  stdout.write(`\n${bold("Add model to provider")}\n\n`);
-  for (const [i, p] of providers.entries()) stdout.write(`  ${bold(String(i + 1).padStart(2))}. ${p.label}\n`);
-  const idx = Number.parseInt(await ask("\nProvider number"), 10) - 1;
-  const p = providers[idx];
-  if (!p) { stdout.write(`  ${fg.red("Invalid provider.")}\n`); await ask("Press enter", ""); return; }
+  // Use provider selector
+  const result = await selectProviderUI(cfg, "Add model to provider");
+  if (!result || result.type !== "select") return;
+  const p = result.provider;
   cfg.providers[p.id] = cfg.providers[p.id] || {};
+  banner();
+  stdout.write(`\n${bold(`Add model to ${p.label}`)}\n\n`);
   const modelId = (await ask("Model id")).trim();
   if (!modelId) return;
   const context = Number.parseInt(await ask("Context tokens", "32000"), 10) || 32000;
@@ -429,7 +602,7 @@ export async function addModelWizard(cfg) {
 export async function settingsMenu(cfg) {
   for (;;) {
     banner();
-    stdout.write(`\n${bold("Settings")}\n\n  1. Lanes, keys, and models\n  2. Behaviour      ${dim(`enhance=${cfg.enhance} clean=${cfg.cleanOutput}`)}\n  3. Performance    ${dim(`race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}`)}\n  4. Server         ${dim(`${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}`)}\n  5. Routing        ${dim(`keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}`)}\n  6. Updates        ${dim(`auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}`)}\n  7. Add provider   ${dim("create a new lane")}\n  8. Add model      ${dim("add a model to a lane")}\n  9. Show config    ${dim("secrets masked")}\n  10. Save and exit\n  11. Exit without saving\n`);
+    stdout.write(`\n${bold("Settings")}\n\n  1. Lanes, keys, and models\n  2. Behaviour      ${dim(`enhance=${cfg.enhance} clean=${cfg.cleanOutput}`)}\n  3. Performance    ${dim(`race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}`)}\n  4. Server         ${dim(`${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}`)}\n  5. Routing        ${dim(`keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}`)}\n  6. Updates        ${dim(`auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}`)}\n  7. Providers      ${dim("search & select from 46+ providers")}\n  8. Add model      ${dim("add a model to a provider")}\n  9. Show config    ${dim("secrets masked")}\n  10. Save and exit\n  11. Exit without saving\n`);
     const choice = await ask("Choice", "10");
     if (choice === "1") await providerMenu(cfg);
     else if (choice === "2") { cfg.enhance = await confirm("Enhance every prompt", cfg.enhance); cfg.cleanOutput = await confirm("Strip filler from non-stream answers", cfg.cleanOutput); }
@@ -505,7 +678,7 @@ const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "◉", desc: "Overview and status" },
   { id: "lanes", label: "Lanes", icon: "≡", desc: "Providers and keys" },
   { id: "models", label: "Models", icon: "◆", desc: "Per-model selection" },
-  { id: "providers", label: "Add Provider", icon: "+", desc: "Add a new lane" },
+  { id: "providers", label: "Providers", icon: "≡", desc: "Search and select providers" },
   { id: "settings", label: "Settings", icon: "⚙", desc: "All configuration" },
   { id: "doctor", label: "Doctor", icon: "♥", desc: "Health check" },
   { id: "update", label: "Update", icon: "↑", desc: "Check for updates" },
@@ -627,4 +800,4 @@ export function help() {
   stdout.write(`\n${bold("a0")} ${dim(`v${VERSION}`)} — OpenAI-compatible inference gateway\n\n${bold("Usage")}\n  a0                 start the gateway (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway\n  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\n${bold("Flags")}\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install\n`);
 }
 
-export default { clear, banner, setupWizard, settingsMenu, doctor, statusLine, modelMenu, addProviderWizard, addModelWizard, promptSecret, help, runTUI, closeInput };
+export default { clear, banner, setupWizard, settingsMenu, doctor, statusLine, modelMenu, addProviderWizard, addModelWizard, promptSecret, help, runTUI, closeInput, selectProviderUI };
