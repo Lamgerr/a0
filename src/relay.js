@@ -5,7 +5,38 @@
 //      best one by a small deterministic rubric.
 // Everything is bounded: attempts, time, and bytes.
 
-export const DEFAULT_SSE = "text/event-stream; charset=utf-8";
+// Simple in-memory response cache for identical requests
+const responseCache = new Map();
+const CACHE_MAX_SIZE = 100;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function cacheKey(body) {
+  // Hash the messages + model + tools
+  const msgs = JSON.stringify(body.messages || []);
+  const tools = JSON.stringify(body.tools || []);
+  const model = body.model || "";
+  return `${model}:${msgs.length}:${tools.length}:${msgs.slice(0, 200)}`;
+}
+
+export function getCachedResponse(body) {
+  const key = cacheKey(body);
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry.response;
+}
+
+export function setCachedResponse(body, response) {
+  if (responseCache.size >= CACHE_MAX_SIZE) {
+    // Evict oldest
+    const oldest = responseCache.keys().next().value;
+    responseCache.delete(oldest);
+  }
+  responseCache.set(cacheKey(body), { response, ts: Date.now() });
+}
 
 import { agentFor } from "./config.js";
 
@@ -153,6 +184,14 @@ function rubric(json) {
   if (Array.isArray(msg.tool_calls) && msg.tool_calls.length) s += 8;
   if (choice.finish_reason === "length") s -= 5;
   if (/^(I can't|I cannot|As an AI|I'm sorry, but)/i.test(text.trim())) s -= 12;
+  // Reward valid JSON when requested
+  if (text && /^\s*[\[{]/.test(text.trim())) {
+    try { JSON.parse(text.trim()); s += 3; } catch { /* not valid json */ }
+  }
+  // Reward code blocks with actual content
+  if (/```[\s\S]{20,}```/.test(text)) s += 3;
+  // Penalize very short answers for complex tasks
+  if (text.length < 50 && text.length > 0) s -= 2;
   s += Math.min(text.length / 500, 5);
   return s;
 }

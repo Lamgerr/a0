@@ -565,6 +565,7 @@ export async function settingsMenu(cfg) {
     } else if (choice === "5") {
       cfg.routing.preferKeyless = await confirm("Prefer keyless lanes", cfg.routing.preferKeyless);
       cfg.routing.sticky = await confirm("Keep one model per session", cfg.routing.sticky);
+      cfg.routing.costOptimize = await confirm("Optimize for cost (prefer cheaper lanes)", cfg.routing.costOptimize !== false);
     } else if (choice === "6") {
       cfg.updates = cfg.updates || {};
       cfg.updates.autoCheck = await confirm("Check for updates on startup", cfg.updates.autoCheck !== false);

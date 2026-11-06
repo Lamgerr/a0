@@ -20,6 +20,10 @@ function taskLines(a) {
   if (a.difficulty >= 3) lines.push("- Decide on one plan, then execute it. Do not explore alternatives in the output.");
   if (a.longContext) lines.push("- Use the supplied context. Do not ask for files that are already present.");
   if (a.wantsJson) lines.push("- Return exactly one valid JSON value, no markdown fence, no commentary.");
+  if (a.useCase === "research") lines.push("- Cite sources when possible. Distinguish facts from inference.");
+  if (a.useCase === "creative") lines.push("- Be original and engaging. Match the requested tone and format.");
+  if (a.useCase === "analysis") lines.push("- Structure your analysis clearly. Show your reasoning step by step.");
+  if (a.useCase === "chat") lines.push("- Be concise and helpful. Ask clarifying questions only when needed.");
   return lines.join("\n");
 }
 

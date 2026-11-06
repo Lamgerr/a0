@@ -7,6 +7,7 @@ import { CATEGORIES, activeProviders, resolveProviders } from "./registry.js";
 import { createServer } from "./server.js";
 import { help, setupWizard, settingsMenu, doctor, statusLine, banner, runTUI } from "./tui.js";
 import { checkLatest, installLatest, maybeCheck } from "./update.js";
+import { startHarness } from "./harness.js";
 
 const VALUE_FLAGS = new Set(["--port", "--host", "--race", "--token", "--best-of"]);
 
@@ -166,6 +167,16 @@ async function serve(cfg) {
 
   if (stdout.isTTY) await statusLine(cfg, providers);
   backgroundUpdateCheck(cfg).catch(() => {});
+
+  // Start background model research harness
+  const stopHarness = startHarness(cfg, {
+    onResult: (r) => {
+      if (r.added > 0 || r.removed > 0) {
+        process.stderr.write(`a0: model refresh — +${r.added} -${r.removed} models\n`);
+      }
+    },
+  });
+  process.on("exit", stopHarness);
 
   const shutdown = () => {
     stdout.write("\n");

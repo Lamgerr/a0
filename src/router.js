@@ -35,6 +35,8 @@ function pool(providers) {
 function score(m, analysis, cfg) {
   let s = (m.quality || 1) * 20;
   const cheap = analysis.category === "a0/cheap";
+  const preferQuality = analysis.difficulty >= 3 || analysis.category === "a0/reasoning" || analysis.category === "a0/code";
+  
   if (m.fast && (analysis.category === "a0/fast" || analysis.difficulty === 1)) s += 8;
   if (analysis.category === "a0/code") s += (m.quality || 1) * 2;
   if (analysis.category === "a0/reasoning" || analysis.difficulty >= 3) s += (m.quality || 1) * 4;
@@ -42,6 +44,23 @@ function score(m, analysis, cfg) {
   if (m.keyless && cfg?.routing?.preferKeyless) s += 4;
   if (cheap && m.keyless) s += 200;
   if (cheap && !m.keyless) s -= 200;
+  
+  // Cost awareness: prefer cheaper lanes when quality is sufficient
+  // For simple tasks (difficulty 1), prefer fast/cheap lanes
+  if (analysis.difficulty === 1 && !preferQuality) {
+    if (m.fast) s += 15;
+    if (m.keyless) s += 10;
+  }
+  
+  // Cost optimization: prefer cheaper lanes when quality is sufficient
+  if (cfg?.routing?.costOptimize !== false && analysis.difficulty <= 2) {
+    if (m.keyless) s += 5;
+    if (m.fast) s += 5;
+  }
+  
+  // Penalize very low quality models for complex tasks
+  if (preferQuality && (m.quality || 1) < 3) s -= 20;
+  
   return s;
 }
 

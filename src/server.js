@@ -6,7 +6,7 @@ import { analyze } from "./classify.js";
 import { enhanceBody, cleanOutputText } from "./enhance.js";
 import { route, RouteError, routeErrorBody } from "./router.js";
 import { catalog, CATEGORIES, resolveProviders } from "./registry.js";
-import { relayStream, relayOnce, RelayError, relayErrorPayload } from "./relay.js";
+import { relayStream, relayOnce, RelayError, relayErrorPayload, getCachedResponse, setCachedResponse } from "./relay.js";
 import { VERSION } from "./config.js";
 
 const CORS = {
@@ -156,6 +156,14 @@ export function createServer({ cfg, providers, log = () => {} }) {
         throw err;
       }
 
+      // Check cache for non-stream identical requests
+      if (!body.stream && body.messages) {
+        const cached = getCachedResponse(body);
+        if (cached) {
+          sendJson(res, 200, cached, { "x-a0-cached": "true", "access-control-allow-origin": "*" });
+          return;
+        }
+      }
       const enhanced = enhanceBody(body, analysis, cfg);
       const clientAbort = new AbortController();
       res.on("close", () => {
@@ -227,6 +235,8 @@ export function createServer({ cfg, providers, log = () => {} }) {
           "x-a0-model": encodeURIComponent(result.model),
           "x-a0-latency-ms": String(result.latencyMs),
         });
+        // Cache the response
+        setCachedResponse(body, result.json);
       } catch (err) {
         const e = err instanceof RelayError ? err : new RelayError("upstream_error", err.message);
         sendJson(res, e.status || 502, relayErrorPayload(e), extra);
