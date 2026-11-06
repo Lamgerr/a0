@@ -35,14 +35,19 @@ function withoutBinary(s) {
 export function analyze(body) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   let vision = false;
+  let textLen = 0;
   let text = "";
 
   for (const msg of messages) {
     if (msg?.role === "assistant" && Array.isArray(msg.tool_calls)) {
-      text += `\n${msg.tool_calls.map((t) => t?.function?.name || "").join(" ")}`;
+      const names = msg.tool_calls.map((t) => t?.function?.name || "").join(" ");
+      text += `\n${names}`;
+      textLen += names.length;
     }
     if (hasImage(msg?.content)) vision = true;
-    text += `\n${contentText(msg?.content)}`;
+    const ct = contentText(msg?.content);
+    text += `\n${ct}`;
+    textLen += ct.length;
   }
 
   const tools =
@@ -50,14 +55,18 @@ export function analyze(body) {
     (Array.isArray(body?.functions) && body.functions.length > 0) ||
     body?.tool_choice !== undefined;
 
-  const raw = JSON.stringify(body?.messages || []);
-  const estTokens = Math.ceil(withoutBinary(raw).length / 4);
-  const haystack = `${text}\n${JSON.stringify((body?.tools || []).map((t) => t?.function?.name || ""))}`;
+  // Estimate tokens from accumulated text length instead of full JSON.stringify.
+  // This avoids serializing the entire body (including base64 images) on
+  // every request. The /4 heuristic matches the previous behaviour.
+  const toolNames = tools ? (body?.tools || []).map((t) => t?.function?.name || "").join(" ") : "";
+  const haystack = `${text}\n${toolNames}`;
+
+  const estTokens = Math.ceil((textLen + toolNames.length + (messages.length * 20)) / 4);
 
   const fenced = /```[\s\S]*?```/.test(text);
   const code = fenced || tools || CODE_WORDS.test(haystack);
   const longContext =
-    estTokens > 24_000 || (Array.isArray(body?.messages) && body.messages.length > 40);
+    estTokens > 24_000 || messages.length > 40;
   const wantsJson =
     body?.response_format?.type === "json_object" ||
     body?.response_format?.type === "json_schema" ||
@@ -81,7 +90,6 @@ export function analyze(body) {
         : difficulty === 1
           ? "a0/fast"
           : "a0/auto";
-  // a0/auto means "decide for me"; any other a0/* category is honored.
   const category = requested.startsWith("a0/") && requested !== "a0/auto" ? requested : inferred;
 
   return {

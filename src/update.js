@@ -4,7 +4,7 @@
 // or surprise the user.
 import { spawn } from "node:child_process";
 
-import { VERSION } from "./config.js";
+import { VERSION, agentFor } from "./config.js";
 
 export const PACKAGE = process.env.A0_PACKAGE || "a0-gateway";
 export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -40,6 +40,7 @@ export async function checkLatest({
     const res = await fetchImpl(url, {
       signal: AbortSignal.timeout(timeoutMs),
       headers: { accept: "application/json" },
+      agent: agentFor(url),
     });
     if (!res.ok) {
       return { ok: false, status: res.status, current, packageName, url };

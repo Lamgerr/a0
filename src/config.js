@@ -1,9 +1,21 @@
 // a0 config: one JSON file, 0600, everything overridable by env.
 import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 
 export const VERSION = "0.1.0";
+
+// Shared keep-alive agents for upstream connections. Reusing TCP connections
+// across requests avoids the ~50-100ms connection setup overhead per lane.
+export const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 128, maxFreeSockets: 32 });
+export const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 128, maxFreeSockets: 32 });
+
+/** Pick the right agent for a URL. */
+export function agentFor(url) {
+  return String(url).startsWith("https:") ? httpsAgent : httpAgent;
+}
 
 export const DEFAULTS = {
   port: 8082,

@@ -31,25 +31,29 @@ export function directive(analysis) {
 /** Return a copy of the request with a0's contract applied. */
 export function enhanceBody(body, analysis, cfg) {
   if (!cfg?.enhance) return body;
-  const out = structuredClone(body);
-  if (!Array.isArray(out.messages)) out.messages = [];
+  const out = { ...body };
+  if (!Array.isArray(out.messages)) out.messages = [...(body?.messages || [])];
 
   const text = directive(analysis);
-  const first = out.messages[0];
+  const msgs = out.messages;
+  const first = msgs[0];
 
   if (first && first.role === "system") {
     if (typeof first.content === "string") {
-      if (!first.content.includes(MARK)) first.content = `${text}\n\n${first.content}`;
+      if (!first.content.includes(MARK)) {
+        msgs[0] = { ...first, content: `${text}\n\n${first.content}` };
+      }
     } else if (Array.isArray(first.content)) {
       if (!JSON.stringify(first.content).includes(MARK)) {
-        first.content.unshift({ type: "text", text });
+        msgs[0] = { ...first, content: [{ type: "text", text }, ...first.content] };
       }
     } else {
-      first.content = text;
+      msgs[0] = { ...first, content: text };
     }
   } else {
-    out.messages.unshift({ role: "system", content: text });
+    msgs.unshift({ role: "system", content: text });
   }
+  out.messages = msgs;
   return out;
 }
 

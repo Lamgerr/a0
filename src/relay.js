@@ -7,6 +7,8 @@
 
 export const DEFAULT_SSE = "text/event-stream; charset=utf-8";
 
+import { agentFor } from "./config.js";
+
 export class RelayError extends Error {
   constructor(code, message, attempts = [], status = 502) {
     super(message);
@@ -28,8 +30,7 @@ function headersFor(c, cfg) {
 }
 
 function payloadFor(c, body) {
-  const out = structuredClone(body);
-  out.model = c.model.id;
+  const out = { ...body, model: c.model.id };
   delete out.a0;
   return out;
 }
@@ -79,6 +80,7 @@ async function openStream(c, body, cfg, signal) {
       headers: headersFor(c, cfg),
       body: JSON.stringify(payloadFor(c, body)),
       signal: ac.signal,
+      agent: agentFor(endpoint(c.provider)),
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
@@ -122,6 +124,7 @@ async function callOnce(c, body, cfg, signal) {
           headers: headersFor(c, cfg),
           body: JSON.stringify(payloadFor(c, body)),
           signal: ac.signal,
+          agent: agentFor(endpoint(c.provider)),
         }),
       () => ac.abort(),
     );

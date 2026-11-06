@@ -5,7 +5,7 @@ import http from "node:http";
 import { analyze } from "./classify.js";
 import { enhanceBody, cleanOutputText } from "./enhance.js";
 import { route, RouteError, routeErrorBody } from "./router.js";
-import { catalog, CATEGORIES } from "./registry.js";
+import { catalog, CATEGORIES, resolveProviders } from "./registry.js";
 import { relayStream, relayOnce, RelayError, relayErrorPayload } from "./relay.js";
 import { VERSION } from "./config.js";
 
@@ -59,6 +59,29 @@ function isLoopback(host) {
 }
 
 export function createServer({ cfg, providers, log = () => {} }) {
+  // Pre-compute catalog once (providers don't change during server lifetime).
+  const cachedCatalog = catalog(providers);
+  const cachedHealthz = {
+    status: "ok",
+    version: VERSION,
+    enhance: cfg.enhance,
+    race: cfg.race,
+    best_of: cfg.bestOf,
+    providers: providers.map((p) => ({
+      id: p.id,
+      enabled: p.enabled,
+      keyless: p.keyless,
+      has_key: p.hasKey,
+      models: p.models.map((m) => ({
+        id: m.id,
+        enabled: m.enabled !== false,
+        tools: !!m.tools,
+        vision: !!m.vision,
+        context: m.context,
+      })),
+    })),
+  };
+
   return http.createServer(async (req, res) => {
     const started = Date.now();
     const url = new URL(req.url || "/", "http://a0.local");
@@ -71,27 +94,7 @@ export function createServer({ cfg, providers, log = () => {} }) {
       }
 
       if (url.pathname === "/healthz" || url.pathname === "/v1/health") {
-        sendJson(res, 200, {
-          status: "ok",
-          version: VERSION,
-          uptime_s: Math.round(process.uptime()),
-          enhance: cfg.enhance,
-          race: cfg.race,
-          best_of: cfg.bestOf,
-          providers: providers.map((p) => ({
-            id: p.id,
-            enabled: p.enabled,
-            keyless: p.keyless,
-            has_key: p.hasKey,
-            models: p.models.map((m) => ({
-              id: m.id,
-              enabled: m.enabled !== false,
-              tools: !!m.tools,
-              vision: !!m.vision,
-              context: m.context,
-            })),
-          })),
-        });
+        sendJson(res, 200, { ...cachedHealthz, uptime_s: Math.round(process.uptime()) });
         return;
       }
 
@@ -107,7 +110,7 @@ export function createServer({ cfg, providers, log = () => {} }) {
       }
 
       if (url.pathname === "/v1/models" && req.method === "GET") {
-        sendJson(res, 200, catalog(providers));
+        sendJson(res, 200, cachedCatalog);
         return;
       }
 

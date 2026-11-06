@@ -127,15 +127,19 @@ export function route(body, analysis, providers, cfg) {
 export function diverse(candidates, n) {
   const picked = [];
   const used = new Set();
+  const pickedSet = new Set();
   for (const c of candidates) {
     if (picked.length >= n) break;
     if (used.has(c.provider.id)) continue;
     used.add(c.provider.id);
     picked.push(c);
+    pickedSet.add(c);
   }
   for (const c of candidates) {
     if (picked.length >= n) break;
-    if (!picked.includes(c)) picked.push(c);
+    if (pickedSet.has(c)) continue;
+    picked.push(c);
+    pickedSet.add(c);
   }
   return picked;
 }

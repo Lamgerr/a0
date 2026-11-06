@@ -779,8 +779,27 @@ function shape(def, cfg) {
   };
 }
 
+// Simple LRU-ish cache for resolved providers. Avoids re-resolving on every
+// request when the config hasn't changed.
+let _providerCache = null;
+let _providerCacheKey = null;
+
+function configKey(cfg) {
+  // Cheap key: provider count + a hash of provider keys/overrides.
+  // Good enough for cache invalidation without deep comparison.
+  let k = cfg.port + ":" + cfg.host + ":" + (cfg.enhance ? "1" : "0");
+  const p = cfg.providers || {};
+  for (const [id, v] of Object.entries(p)) {
+    k += "|" + id + ":" + (v?.key ? "k" : "") + (v?.enabled === false ? "0" : "1") + (v?.disabled?.length || 0);
+  }
+  return k;
+}
+
 /** Merge built-in lanes with the user's overrides and custom lanes. */
 export function resolveProviders(cfg) {
+  const key = configKey(cfg);
+  if (_providerCache && _providerCacheKey === key) return _providerCache;
+
   const out = [];
   const seen = new Set();
   for (const def of DEFAULT_PROVIDERS) {
@@ -810,9 +829,15 @@ export function resolveProviders(cfg) {
       ),
     );
   }
+  _providerCache = out;
+  _providerCacheKey = key;
   return out;
 }
 
+export function clearProviderCache() {
+  _providerCache = null;
+  _providerCacheKey = null;
+}
 export function activeProviders(providers) {
   return providers.filter((p) => p.enabled && p.models.some((m) => m.enabled !== false));
 }
