@@ -1,4 +1,5 @@
-// TUI — full-screen, OpenCode-style. Zero dependencies, ANSI only.
+// TUI — full-screen, OpenCode-inspired. Zero dependencies, ANSI only.
+// Uses alternate screen buffer. Mouse + keyboard navigation.
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
@@ -18,14 +19,15 @@ const MOUSE_ON = `${ESC}[?1000h${ESC}[?1002h${ESC}[?1015h${ESC}[?1006h`;
 const MOUSE_OFF = `${ESC}[?1006l${ESC}[?1015l${ESC}[?1002l${ESC}[?1000l`;
 
 const c = (code) => (s) => tty ? `${ESC}[${code}m${s}${RESET}` : String(s);
-const bold = c("1"); const dim = c("2"); const italic = c("3");
+const bold = c("1"); const dim = c("2");
 const fg = {
   cyan: c("36"), green: c("32"), yellow: c("33"), red: c("31"),
   blue: c("34"), magenta: c("35"), white: c("37"), gray: c("90"),
+  orange: c("38;5;208"),
 };
-const bg = { blue: c("44"), cyan: c("46"), gray: c("100") };
+const bg = { blue: c("44"), dark: c("48;5;236"), highlight: c("48;5;24") };
 
-const BOX = { tl:"┌", tr:"┐", bl:"└", br:"┘", h:"─", v:"│", T:"┬", B:"┴", L:"├", R:"┤", X:"┼" };
+const BOX = { tl:"┌", tr:"┐", bl:"└", br:"┘", h:"─", v:"│" };
 
 function termSize() { return { w: stdout.columns || 80, h: stdout.rows || 24 }; }
 function move(r, col) { stdout.write(`${ESC}[${r};${col}H`); }
@@ -48,7 +50,6 @@ function setupRawInput() {
 function processInput() {
   while (inputBuffer.length > 0) {
     let consumed = false;
-    // Mouse events (SGR format)
     if (inputBuffer.startsWith("\x1b[<")) {
       const match = inputBuffer.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
       if (match) {
@@ -141,8 +142,13 @@ export function promptSecret(question) {
 }
 
 // ── drawing primitives ────────────────────────────────────────────────────
-function drawBox(r, col, w, h, title = "", style = "") {
-  const colorFn = style === "active" ? fg.cyan : style === "dim" ? dim : (s) => s;
+export function clear() { if (tty) stdout.write("\x1b[2J\x1b[H"); }
+export function banner() {
+  clear();
+  stdout.write(`\n${bold(fg.cyan("  a0"))} ${dim(`v${VERSION}`)}\n${dim("  OpenAI-compatible inference gateway")}\n`);
+}
+
+function drawBox(r, col, w, h, title = "", colorFn = (s) => s) {
   let top = BOX.tl;
   if (title) {
     const ts = ` ${title} `;
@@ -151,14 +157,9 @@ function drawBox(r, col, w, h, title = "", style = "") {
     top += "─".repeat(Math.max(0, lp)) + ts + "─".repeat(Math.max(0, rp)) + BOX.tr;
   } else top += "─".repeat(w - 2) + BOX.tr;
   writeAt(r, col, colorFn(top));
-  for (let i = 1; i < h - 1; i++) {
-    writeAt(r + i, col, colorFn(BOX.v));
-    writeAt(r + i, col + w - 1, colorFn(BOX.v));
-  }
+  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, colorFn(BOX.v)); writeAt(r + i, col + w - 1, colorFn(BOX.v)); }
   writeAt(r + h - 1, col, colorFn(BOX.bl + "─".repeat(w - 2) + BOX.br));
 }
-
-function drawHLine(r, col, w) { writeAt(r, col, "─".repeat(w)); }
 
 function drawStatusBar(items) {
   const { w, h } = termSize();
@@ -166,22 +167,15 @@ function drawStatusBar(items) {
   writeAt(h, 1, `${ESC}[7m${bar.padEnd(w).slice(0, w)}${RESET}`);
 }
 
-function clearScreen() { stdout.write(CLEAR); }
+function drawHLine(r, col, w, ch = "─") { writeAt(r, col, ch.repeat(w)); }
 
-// ── original helpers ──────────────────────────────────────────────────────
-export function clear() { if (tty) stdout.write("\x1b[2J\x1b[H"); }
-export function banner() {
-  clear();
-  stdout.write(`\n${bold(fg.cyan("  a0"))} ${dim(`v${VERSION}`)}\n${dim("  OpenAI-compatible inference gateway")}\n`);
-}
-
+// ── tier helpers ──────────────────────────────────────────────────────────
 function tierLabel(p) {
   if (p.tier === "recommended") return fg.green("recommended");
   if (p.tier === "keyless") return dim("keyless");
   if (p.tier === "local") return fg.cyan("local");
   return fg.yellow("optional");
 }
-
 function capLine(p) {
   const caps = [tierLabel(p)];
   if (p.hasKey) caps.push(dim(`key ${mask(p.key)}`));
@@ -192,16 +186,13 @@ function capLine(p) {
   else caps.push(dim(enabled === total ? `${total} models` : `${enabled}/${total} models`));
   return caps.join(" · ");
 }
-
 function providerList(providers) {
   return providers.map((p, i) => {
     const n = bold(String(i + 1).padStart(2));
     return `  ${n}. ${p.enabled ? fg.green("●") : dim("○")} ${p.label.padEnd(18)} ${capLine(p)}`;
   }).join("\n");
 }
-
 function saveKey(cfg, id, key) { cfg.providers[id] = { ...(cfg.providers[id] || {}), key, enabled: true }; }
-
 function testProvider(p) {
   const url = `${p.baseUrl.replace(/\/+$/, "")}/models`;
   const started = Date.now();
@@ -524,10 +515,6 @@ const MENU_ITEMS = [
 let menuIndex = 0;
 let currentView = "menu";
 
-// (drawBox already defined above)
-
-// (drawStatusBar already defined above)
-
 function renderMenu() {
   const { w, h } = termSize();
   stdout.write(CLEAR);
@@ -607,7 +594,6 @@ export async function runTUI(cfg) {
         }
       } else if (ev.key === "q" && currentView === "menu") { cleanup(); process.exit(0); }
     } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
-      // Click handling for menu items
       const menuR = 3, menuC = 2, menuW = 30;
       if (ev.col >= menuC && ev.col < menuC + menuW && ev.row >= menuR + 2 && ev.row < menuR + 2 + MENU_ITEMS.length) {
         const idx = ev.row - (menuR + 2);

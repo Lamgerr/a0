@@ -28,5 +28,6 @@
     "src",
     "README.md",
     "docs/a0-brief.md"
-  ]
+  ],
+  "dependencies": {}
 }
