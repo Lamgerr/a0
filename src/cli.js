@@ -6,6 +6,7 @@ import { configExists, configPath, loadConfig, saveConfig, VERSION } from "./con
 import { CATEGORIES, activeProviders, resolveProviders } from "./registry.js";
 import { createServer } from "./server.js";
 import { help, setupWizard, settingsMenu, doctor, statusLine, banner, runTUI } from "./tui.js";
+import { startDaemon, stopDaemon, restartDaemon, daemonStatus, isRunning, logFile } from "./daemon.js";
 import { checkLatest, installLatest, maybeCheck } from "./update.js";
 import { startHarness } from "./harness.js";
 
@@ -234,6 +235,32 @@ async function main() {
     case "serve":
       cfg = applyFlags(cfg, flags);
       await serve(cfg);
+      return;
+    case "start":
+      cfg = applyFlags(cfg, flags);
+      const startResult = startDaemon(cfg, flags);
+      stdout.write(`${startResult.ok ? "✓" : "✗"} ${startResult.message}\n`);
+      if (!startResult.ok) process.exitCode = 1;
+      return;
+    case "stop":
+      const stopResult = stopDaemon();
+      stdout.write(`${stopResult.ok ? "✓" : "✗"} ${stopResult.message}\n`);
+      if (!stopResult.ok) process.exitCode = 1;
+      return;
+    case "restart":
+      cfg = applyFlags(cfg, flags);
+      const restartResult = restartDaemon(cfg, flags);
+      stdout.write(`${restartResult.stop.ok ? "✓" : "✗"} ${restartResult.stop.message}\n`);
+      stdout.write(`${restartResult.start.ok ? "✓" : "✗"} ${restartResult.start.message}\n`);
+      if (!restartResult.start.ok) process.exitCode = 1;
+      return;
+    case "status":
+      const st = daemonStatus();
+      stdout.write(`${st.running ? "●" : "○"} ${st.message}\n`);
+      if (st.running) {
+        const { running, pid } = isRunning();
+        stdout.write(`  pid: ${pid}\n  log: ${logFile()}\n`);
+      }
       return;
     case "":
       if (!configExists()) {
