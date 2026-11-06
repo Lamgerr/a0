@@ -5,7 +5,7 @@ import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 
-export const VERSION = "0.2.3";
+export const VERSION = "0.2.4";
 
 // Shared keep-alive agents for upstream connections. Reusing TCP connections
 // across requests avoids the ~50-100ms connection setup overhead per lane.
