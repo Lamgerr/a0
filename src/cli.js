@@ -246,7 +246,11 @@ async function main() {
       } else {
         cfg = applyFlags(cfg, flags);
       }
-      await serve(cfg);
+      if (stdin.isTTY && !flags.serve) {
+        await runTUI(cfg);
+      } else {
+        await serve(cfg);
+      }
       return;
     default:
       process.stderr.write(`a0: unknown command "${command}"\n\n`);
