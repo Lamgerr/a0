@@ -1,6 +1,6 @@
 # a0 — Master Brief
 
-**Build a0 as a local, free-first, OpenAI-compatible inference gateway with a routing brain.**
+**Build a0 as a local, self-hosted, OpenAI-compatible inference gateway.**
 Not an agent. Not a chat UI. Not a hosted service.
 
 ## Who it is for
