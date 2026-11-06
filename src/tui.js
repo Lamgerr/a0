@@ -150,6 +150,7 @@ export function promptSecret(question) {
 function tierLabel(p) {
   if (p.tier === "recommended") return green("recommended");
   if (p.tier === "keyless") return dim("keyless");
+  if (p.tier === "local") return cyan("local");
   return yellow("optional");
 }
 
@@ -303,7 +304,7 @@ ${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}
         `  ${on ? green("●") : dim("○")} ${bold(String(i + 1).padStart(2))}. ${m.id.padEnd(34)} ${dim(meta)}\n`,
       );
     }
-    stdout.write(`\n  ${dim(`${enabled}/${total} enabled · toggle <n> · all · none · back`)}\n`);
+    stdout.write(`\n  ${dim(`${enabled}/${total} enabled · toggle <n> · all · none · add · back`)}\n`);
     const input = (await ask("Command", "back")).trim().toLowerCase();
     const [cmd, arg] = input.split(/\s+/);
     if (cmd === "back" || cmd === "b") return;
@@ -319,6 +320,26 @@ ${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}
       if (!(await confirm(`Disable all ${total} models on ${fresh.label}?`, false))) continue;
       for (const id of ids) setModelEnabled(cfg, fresh.id, id, false, ids);
       persist(cfg);
+      continue;
+    }
+    if (cmd === "add" || cmd === "a") {
+      const modelId = (await ask("  Model id")).trim();
+      if (!modelId) continue;
+      const context = Number.parseInt(await ask("    Context tokens", "32000"), 10) || 32000;
+      const tools = await confirm("    Supports tool calls?", true);
+      const vision = await confirm("    Supports vision?", false);
+      const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("    Quality 1-5", "3"), 10) || 3));
+      const fast = await confirm("    Fast lane?", false);
+      const override = cfg.providers[fresh.id] || {};
+      if (!Array.isArray(override.models)) override.models = (fresh.models || []).map((m) => {
+        const { providerId, providerLabel, keyless, enabled, ...rest } = m;
+        return rest;
+      });
+      override.models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
+      cfg.providers[fresh.id] = override;
+      persist(cfg);
+      stdout.write(`    ${green("✓")} ${modelId} added\n`);
+      await ask("Press enter", "");
       continue;
     }
 
@@ -424,6 +445,114 @@ export async function showUpdateCheck(cfg) {
   return result;
 }
 
+/** Walk the user through creating a new provider lane. */
+export async function addProviderWizard(cfg) {
+  banner();
+  stdout.write(`\n${bold("Add provider")}\n\n`);
+  const id = (await ask("Provider id (slug, lowercase)")).trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  if (!id) return;
+  if (cfg.providers[id]) {
+    stdout.write(`  ${yellow("A provider with id")} ${bold(id)} ${yellow("already exists.")}\n`);
+    await ask("Press enter", "");
+    return;
+  }
+  const label = (await ask("Display name", id)) || id;
+  const baseUrl = (await ask("Base URL (OpenAI-compatible)")).trim().replace(/\/+$/, "");
+  if (!baseUrl) {
+    stdout.write(`  ${red("Base URL is required.")}\n`);
+    await ask("Press enter", "");
+    return;
+  }
+  const keyless = await confirm("Is this provider keyless (no API key)?", false);
+  let key = "";
+  let keyEnv = "";
+  if (!keyless) {
+    key = (await promptSecret(`  API key ${dim("(enter to skip)")} `)).trim();
+    keyEnv = (await ask("Env var name for the key (optional)")).trim();
+  }
+  const tier = (await ask("Tier (local/optional/recommended)", keyless ? "local" : "optional")).trim().toLowerCase();
+  const validTier = ["local", "optional", "recommended", "keyless"].includes(tier) ? tier : "optional";
+
+  const models = [];
+  stdout.write(`\n${bold("Models")} ${dim("(add at least one; empty id to finish)")}\n`);
+  for (;;) {
+    const modelId = (await ask("  Model id")).trim();
+    if (!modelId) break;
+    const context = Number.parseInt(await ask("    Context tokens", "32000"), 10) || 32000;
+    const tools = await confirm("    Supports tool calls?", true);
+    const vision = await confirm("    Supports vision?", false);
+    const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("    Quality 1-5", "3"), 10) || 3));
+    const fast = await confirm("    Fast lane?", false);
+    models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
+    stdout.write(`    ${green("✓")} ${modelId} added\n`);
+  }
+  if (models.length === 0) {
+    stdout.write(`  ${yellow("No models added; provider not saved.")}\n`);
+    await ask("Press enter", "");
+    return;
+  }
+
+  cfg.providers[id] = {
+    baseUrl,
+    ...(key ? { key } : {}),
+    ...(keyEnv ? { keyEnv } : {}),
+    models,
+    enabled: true,
+  };
+  // Store tier/keyless as overrides (resolveProviders reads them from the override)
+  cfg.providers[id].tier = validTier;
+  cfg.providers[id].keyless = keyless;
+  cfg.providers[id].label = label;
+  cfg.providers[id].freeTier = true;
+  cfg.providers[id].rpm = 30;
+  cfg.providers[id].note = "custom lane";
+  cfg.providers[id].setup = { url: baseUrl, note: "custom lane" };
+
+  persist(cfg);
+  stdout.write(`\n${green("✓")} provider ${bold(id)} saved with ${models.length} model(s)\n`);
+  await ask("Press enter", "");
+}
+
+/** Add a custom model to an existing provider. */
+export async function addModelWizard(cfg) {
+  banner();
+  const providers = resolveProviders(cfg);
+  stdout.write(`\n${bold("Add model to provider")}\n\n`);
+  for (const [i, p] of providers.entries()) {
+    stdout.write(`  ${bold(String(i + 1).padStart(2))}. ${p.label}\n`);
+  }
+  const idx = Number.parseInt(await ask("\nProvider number"), 10) - 1;
+  const p = providers[idx];
+  if (!p) {
+    stdout.write(`  ${red("Invalid provider.")}\n`);
+    await ask("Press enter", "");
+    return;
+  }
+  cfg.providers[p.id] = cfg.providers[p.id] || {};
+  const modelId = (await ask("Model id")).trim();
+  if (!modelId) return;
+  const context = Number.parseInt(await ask("Context tokens", "32000"), 10) || 32000;
+  const tools = await confirm("Supports tool calls?", true);
+  const vision = await confirm("Supports vision?", false);
+  const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("Quality 1-5", "3"), 10) || 3));
+  const fast = await confirm("Fast lane?", false);
+
+  // Append to override models list
+  const override = cfg.providers[p.id];
+  if (!Array.isArray(override.models)) override.models = (p.models || []).map((m) => ({ ...m }));
+  // Remove providerId/providerLabel/keyless/enabled which are added by shape()
+  for (const m of override.models) {
+    delete m.providerId;
+    delete m.providerLabel;
+    delete m.keyless;
+    delete m.enabled;
+  }
+  override.models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
+  persist(cfg);
+  stdout.write(`\n${green("✓")} model ${bold(modelId)} added to ${p.label}\n`);
+  await ask("Press enter", "");
+}
+
 export async function settingsMenu(cfg) {
   for (;;) {
     banner();
@@ -436,11 +565,13 @@ ${bold("Settings")}
   4. Server         ${dim(`${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}`)}
   5. Routing        ${dim(`keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}`)}
   6. Updates        ${dim(`auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}`)}
-  7. Show config    ${dim("secrets masked")}
-  8. Save and exit
-  9. Exit without saving
+  7. Add provider   ${dim("create a new lane")}
+  8. Add model      ${dim("add a model to a lane")}
+  9. Show config    ${dim("secrets masked")}
+  10. Save and exit
+  11. Exit without saving
 `);
-    const choice = await ask("Choice", "8");
+    const choice = await ask("Choice", "10");
 
     if (choice === "1") {
       await providerMenu(cfg);
@@ -470,13 +601,17 @@ ${bold("Settings")}
         await ask("Press enter", "");
       }
     } else if (choice === "7") {
+      await addProviderWizard(cfg);
+    } else if (choice === "8") {
+      await addModelWizard(cfg);
+    } else if (choice === "9") {
       stdout.write(`\n${JSON.stringify(redact(cfg), null, 2)}\n`);
       await ask("\nPress enter", "");
-    } else if (choice === "8") {
+    } else if (choice === "10") {
       const file = persist(cfg);
       stdout.write(`\n${green("✓")} saved ${dim(file)}\n`);
       return cfg;
-    } else if (choice === "9") {
+    } else if (choice === "11") {
       return cfg;
     }
   }
@@ -535,7 +670,7 @@ ${bold("a0")} ${dim(`v${VERSION}`)} — free-first inference gateway
 ${bold("Usage")}
   a0                 start the gateway (runs setup on first launch)
   a0 setup           guided key + lane setup
-  a0 config          interactive settings
+  a0 config          interactive settings (add providers, models, keys)
   a0 serve           start the gateway
   a0 doctor          check every lane
   a0 models          list categories and lanes

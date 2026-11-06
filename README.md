@@ -139,7 +139,8 @@ and never leave the machine.
 
 ## Add your own provider
 
-Any OpenAI-compatible endpoint works. Add it to `~/.a0/config.json`:
+Any OpenAI-compatible endpoint works. Add it interactively via `a0 config` → **Add provider**,
+or by hand in `~/.a0/config.json`:
 
 ```json
 {
@@ -147,6 +148,9 @@ Any OpenAI-compatible endpoint works. Add it to `~/.a0/config.json`:
     "my-lane": {
       "baseUrl": "https://api.example.com/v1",
       "key": "sk-...",
+      "tier": "optional",
+      "keyless": false,
+      "label": "My Lane",
       "models": [
         {
           "id": "my-model",
@@ -162,8 +166,21 @@ Any OpenAI-compatible endpoint works. Add it to `~/.a0/config.json`:
 }
 ```
 
-`quality` is 1–5 relative to the free pool. `tools` and `vision` are hard capability gates —
-mark them honestly or agentic clients will break.
+You can also add individual models to an existing lane via `a0 config` → **Add model**,
+or by appending to the `models` array in the config.
+
+### Built-in providers
+
+a0 ships with 46 providers out of the box, including:
+
+- **Recommended free keys**: Kilo Gateway, xKiro, Groq, Z.ai
+- **Optional**: OpenRouter, MiMo, Alibaba DashScope, OpenAI, Gemini, Anthropic, Mistral,
+  Cohere, DeepSeek, Together, Fireworks, Perplexity, Cerebras, SambaNova, Novita,
+  SiliconFlow, Moonshot, MiniMax, StepFun, NVIDIA NIM, Hyperbolic, DeepInfra, Nebius,
+  AI21, Hugging Face, Replicate, Cloudflare, Lepton, Anyscale, xAI, 01.AI, Baichuan,
+  InternLM
+- **Keyless**: LLM7, Pollinations
+- **Local**: Ollama, LM Studio, vLLM, llama.cpp server
 
 ## Security
 

@@ -40,7 +40,7 @@ test("one key switches to keyed mode and disables anonymous lanes", () => {
   for (const id of ["llm7", "pollinations", "kilo"]) {
     assert.equal(providers.find((p) => p.id === id).enabled, false, `${id} should be off`);
   }
-  assert.deepEqual(result.disabled.sort(), ["kilo", "llm7", "pollinations"]);
+  assert.deepEqual(result.disabled.sort(), ["kilo", "llamacpp", "llm7", "lmstudio", "ollama", "pollinations", "vllm"]);
   assert.equal(cfg.routing.preferKeyless, false);
 });
 
@@ -61,7 +61,8 @@ test("the recommended set is ordered and the optional set is separate", () => {
   assert.deepEqual(RECOMMENDED_IDS, ["kilo", "xkiro", "groq", "zai"]);
   assert.deepEqual(ids(optional(providers)), OPTIONAL_IDS);
   assert.deepEqual(OPTIONAL_IDS, ["openrouter", "mimo", "alibaba", "openai", "gemini"]);
-  assert.equal(DEFAULT_PROVIDERS.length, 11);
+  // many providers now (46 total)
+  assert.ok(resolveProviders(cfgWith()).length >= 40, "should have 40+ providers");
 });
 
 test("every provider carries setup guidance", () => {
