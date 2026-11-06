@@ -14,7 +14,14 @@ your client ──► http://127.0.0.1:8082/v1 ──► a0 ──► free lanes
 ## Quick start
 
 ```sh
-npx a0          # first run opens the setup wizard, then serves
+npx a0-gateway  # guided setup on first run, then serves
+```
+
+Or install it once:
+
+```sh
+npm install -g a0-gateway
+a0              # same thing, shorter
 ```
 
 Or from source:
@@ -34,6 +41,35 @@ Then point your client at:
 
 `GET /v1/models` lists a0's categories plus every enabled raw model.
 
+## Setup: keys first, keyless as the fallback
+
+a0 works with no account at all. But anonymous quota is shared per IP and has tighter
+limits, so setup recommends adding **legit free-tier keys** first. If you add at least one
+key, a0 runs in **keyed mode** and turns the anonymous lanes off. If you skip every key, it
+runs in **keyless mode** with the anonymous pool. Both modes are one setting away in
+`a0 config`.
+
+The wizard walks you through each provider, with the key URL and the actual free limits:
+
+### Recommended
+
+| provider | why | get a key |
+|---|---|---|
+| **Kilo Gateway** | `:free` models, 200 req/hr anonymous, a key raises limits | [app.kilo.ai](https://app.kilo.ai) |
+| **xKiro** | 45 free models, 500K tokens/day (1M after Telegram) | [xkiro.com/register](https://xkiro.com/register) |
+| **Groq** | free tier, the fastest lane — best upgrade for agentic sessions | [console.groq.com/keys](https://console.groq.com/keys) |
+| **Z.ai** | GLM-5.3-Flash: 1M context, vision + tools, strong coding | [z.ai API keys](https://z.ai/manage-apikey/apikey-list) |
+
+### Optional — free tiers exist, but are tighter or less predictable
+
+| provider | caveat | get a key |
+|---|---|---|
+| OpenRouter | ~50 free requests/day without credit | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| MiMo | limited quota; verify the model id | [platform.xiaomimimo.com](https://platform.xiaomimimo.com) |
+| Alibaba DashScope | region-limited, expiring free quota | [Bailian console](https://bailian.console.alibabacloud.com/) |
+| OpenAI | no free tier | [platform.openai.com](https://platform.openai.com/api-keys) |
+| Gemini | free project quotas are opaque and change | [AI Studio](https://aistudio.google.com/apikey) |
+
 ## What makes it different
 
 A plain proxy tries lane 1, then lane 2. a0 decides before it sends:
@@ -47,8 +83,8 @@ A plain proxy tries lane 1, then lane 2. a0 decides before it sends:
   usable first byte, then aborts the loser. A slow free lane can't stall a session.
 - **Best-of.** For non-stream calls, a0 can collect several answers and keep the best by a
   small deterministic rubric (valid tool call, real code, no refusal, not truncated).
-- **Cost first.** Keyless lanes are preferred. A keyed free tier is an upgrade, not a
-  requirement.
+- **Free first.** Keyless is the default until you add a key; after that, your keyed lanes
+  are primary and the anonymous pool is optional fallback.
 
 ## Categories
 
@@ -64,28 +100,38 @@ A plain proxy tries lane 1, then lane 2. a0 decides before it sends:
 
 A raw model id (for example `gpt-oss-120b`) is also accepted when that lane is enabled.
 
-## Lanes
+## Pick your models
 
-Keyless lanes are on by default. Keyed lanes stay off until you add a key.
+Every keyed lane exposes its model list in `a0 config` → **Lanes, keys, and models** →
+`models <n>`. Toggle individual models, or use `all` / `none`; the choice is stored per lane
+as a `disabled` list and survives restarts. Disabled models disappear from `GET /v1/models`
+and are never routed to, even when a client names them explicitly.
 
-| lane | default | notes |
-|---|---|---|
-| LLM7 | keyless | anonymous tier, ~500K tokens/day |
-| Pollinations | keyless | fully keyless, text + tools |
-| OpenRouter | key | free models with a free account key |
-| Groq | key | free tier, very fast — the best upgrade for agentic sessions |
-| Gemini | key | free project quota, best vision option |
-| xKiro | key | 500K tokens/day, flagship free models |
+Anonymous-pool models (LLM7, Pollinations, and Kilo without a key) are curated by a0 and are
+not individually selectable. Add a key for a provider that offers one to take control of its
+catalog.
 
-Free lanes change and die. a0 treats the lane list as data: update it without touching code.
+## Stay current
+
+Free lanes change fast, so a0 can keep itself current:
+
+```sh
+a0 update          # check npm, then install the latest release
+a0 update --check  # report only
+```
+
+On startup a0 checks npm at most once a day, without delaying the server. It only prints a
+notice by default; set `updates.autoInstall` in `a0 config` → **Updates** to install
+automatically. Either way, restart the process to run the new version.
 
 ## TUI
 
 ```sh
-a0 setup     # first-run wizard
+a0 setup     # guided key + lane setup
 a0 config    # change every setting interactively
 a0 doctor    # check which lanes are reachable
 a0 models    # list categories and lanes
+a0 update    # check for and install a newer release
 ```
 
 Everything is stored in `~/.a0/config.json` with `0600` permissions. Keys are never logged
@@ -136,12 +182,23 @@ mark them honestly or agentic clients will break.
 | `A0_ENHANCE` | `off` disables prompt enhancement |
 | `A0_RACE` | lanes raced in parallel (1–4) |
 | `A0_BEST_OF` | non-stream answers to compare (1–4) |
-| `A0_LLM7_KEY`, `A0_OPENROUTER_KEY`, `A0_GROQ_KEY`, `A0_GEMINI_KEY`, `A0_XKIRO_KEY` | lane keys |
+| `A0_PACKAGE` | npm package used by the updater (default `a0-gateway`) |
+| `A0_KILO_KEY` | Kilo Gateway key |
+| `A0_XKIRO_KEY` | xKiro key |
+| `A0_GROQ_KEY` | Groq key |
+| `A0_ZAI_KEY` | Z.ai key |
+| `A0_OPENROUTER_KEY` | OpenRouter key |
+| `A0_MIMO_KEY` | MiMo key |
+| `A0_ALIBABA_KEY` | Alibaba DashScope key |
+| `A0_OPENAI_KEY` | OpenAI key |
+| `A0_GEMINI_KEY` | Google Gemini key |
+| `A0_LLM7_KEY` | optional LLM7 token (raises the anonymous limit) |
 
 ## Status
 
-v0.1: gateway, enhancement, routing, race, best-of, TUI, tests. The old Go gateway and React
-dashboard in this repository are legacy and will be removed once parity is confirmed.
+v0.1: gateway, enhancement, routing, race, best-of, guided TUI setup, per-model selection,
+self-update, tests. The old Go gateway and React dashboard in this repository are legacy and
+will be removed once parity is confirmed.
 
 ## License
 

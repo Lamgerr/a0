@@ -6,6 +6,7 @@ import { configExists, configPath, loadConfig, saveConfig, VERSION } from "./con
 import { CATEGORIES, activeProviders, resolveProviders } from "./registry.js";
 import { createServer } from "./server.js";
 import { help, setupWizard, settingsMenu, doctor, statusLine, banner } from "./tui.js";
+import { checkLatest, installLatest, maybeCheck } from "./update.js";
 
 const VALUE_FLAGS = new Set(["--port", "--host", "--race", "--token", "--best-of"]);
 
@@ -67,13 +68,63 @@ function listModels(cfg) {
     const badges = [p.keyless ? "keyless" : "key", p.hasKey ? "ready" : ""].filter(Boolean).join(",");
     stdout.write(`  ${state} ${p.label.padEnd(16)} ${"\x1b[2m"}${badges.padEnd(16)}\x1b[0m\n`);
     for (const m of p.models) {
+      const off = m.enabled === false;
       const caps = [m.tools ? "tools" : "", m.vision ? "vision" : "", m.fast ? "fast" : ""].filter(Boolean).join(",");
-      stdout.write(
-        `      ${m.id.padEnd(32)} ${"\x1b[2m"}${String(Math.round((m.context || 0) / 1000))}k${caps ? ` · ${caps}` : ""}\x1b[0m\n`,
-      );
+      const meta = `${String(Math.round((m.context || 0) / 1000))}k${caps ? ` · ${caps}` : ""}`;
+      stdout.write(`      ${off ? "\x1b[2m○" : "●"} ${(off ? `(off) ${m.id}` : m.id).padEnd(32)} ${meta}\x1b[0m\n`);
     }
   }
   stdout.write(`\n${"\x1b[2m"}Config: ${configPath()}\x1b[0m\n`);
+}
+
+async function updateCommand(cfg, flags) {
+  stdout.write(`a0 v${VERSION} — checking npm…\n`);
+  const result = await checkLatest();
+  if (!result.ok) {
+    process.stderr.write(`a0: update check failed — ${result.error || result.status}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  cfg.updates = { ...(cfg.updates || {}), lastCheck: Date.now() };
+  saveConfig(cfg);
+  if (!result.update) {
+    stdout.write(`a0 is up to date (v${result.current}).\n`);
+    return;
+  }
+  stdout.write(`a0 v${result.latest} is available (you have v${result.current}).\n`);
+  if (flags.check) {
+    stdout.write("Run `a0 update` to install.\n");
+    return;
+  }
+  stdout.write(`Installing ${result.packageName}@latest…\n`);
+  const installed = await installLatest({ packageName: result.packageName });
+  if (!installed.ok) {
+    process.stderr.write(`a0: npm install failed — ${installed.error || `exit ${installed.code}`}\n`);
+    process.stderr.write(`Try: npm install -g ${result.packageName}@latest\n`);
+    process.exitCode = 1;
+    return;
+  }
+  stdout.write(`✓ updated. Restart a0 to use v${result.latest}.\n`);
+}
+
+/** Fire-and-forget version check. Never delays or breaks startup. */
+async function backgroundUpdateCheck(cfg) {
+  const result = await maybeCheck(cfg);
+  if (!result?.checked) return;
+  try {
+    saveConfig(cfg);
+  } catch {
+    /* a read-only config dir must not break serving */
+  }
+  if (!result.ok || !result.update) return;
+  if (cfg.updates?.autoInstall) {
+    process.stderr.write(`\na0: v${result.latest} available — installing…\n`);
+    const installed = await installLatest({ packageName: result.packageName });
+    if (installed.ok) process.stderr.write(`a0: updated to v${result.latest}; restart to apply.\n`);
+    else process.stderr.write(`a0: auto-update failed — run \`a0 update\`.\n`);
+    return;
+  }
+  process.stderr.write(`\na0: v${result.latest} available (you have v${VERSION}). Run \`a0 update\`.\n`);
 }
 
 async function serve(cfg) {
@@ -114,6 +165,7 @@ async function serve(cfg) {
   }
 
   if (stdout.isTTY) await statusLine(cfg, providers);
+  backgroundUpdateCheck(cfg).catch(() => {});
 
   const shutdown = () => {
     stdout.write("\n");
@@ -154,6 +206,9 @@ async function main() {
     case "doctor":
       applyFlags(cfg, flags);
       await doctor(cfg);
+      return;
+    case "update":
+      await updateCommand(cfg, flags);
       return;
     case "config":
       applyFlags(cfg, flags);

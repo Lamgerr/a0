@@ -1,39 +1,32 @@
-# a0 — what happened while you were away (2026-11-06)
+# a0 — Summary (run of 2026-11-06)
 
-## DONE
+## Done this run
+- Guided setup wizard now leads with legit free keys (Kilo, xKiro, Groq, Z.ai) and offers
+  OpenRouter, MiMo, Alibaba, OpenAI, Gemini as optional, each with its key URL and steps.
+- `applySetupMode`: keyless default when no keys; adding any key switches to keyed mode and
+  disables the anonymous lanes; keeping them as fallback is an explicit opt-in.
+- Per-model selection on keyed lanes: `cfg.providers[id].disabled` array, honoured by
+  `shape()`, `activeProviders`, `catalog`, `findModel`, and the router pool. TUI
+  `modelMenu` (toggle/all/none) wired as `models <n>` in the lane menu; anonymous-pool
+  lanes are blocked from selection. `a0 models` and `capLine` show enabled/total counts.
+- Self-updater: `src/update.js` + `a0 update [--check]` + non-blocking daily check on
+  `serve` + setup/settings prompts + help text. Tests inject fetch/spawn fakes.
+- Renamed the npm package from `a0` to `a0-gateway` (the `a0` name is an unrelated web
+  framework on npm). Command stays `a0`.
+- Rewrote TUI input as a shared line queue so pasted multi-line input is not dropped.
+- Healthz now reports per-model enabled flags.
+- README.md and docs/a0-brief.md updated.
+- 50 tests, all green (was 32).
 
-**The pivot is real and v0.1 runs.** a0 is now a local, free-first, OpenAI-compatible
-inference gateway — a provider, not an agent, not a hosted service.
+## In progress
+- None. The agreed scope for this run is complete.
 
-- **Zero-dependency Node 18+ ESM package.** Go toolchain isn't installed here, and npm is the
-  delivery target, so rewriting the core in Node was the only path that could actually be
-  built and tested. Old Go gateway + React dashboard are untouched legacy, to delete at parity.
-- **Shipped modules:** `config` (0600 JSON), `registry` (lanes as data), `classify` (vision /
-  tools / long-context / difficulty), `enhance` (idempotent operating contract on every
-  request), `router` (hard capability gates + scoring + provider diversity), `relay`
-  (streaming race + non-stream best-of + failover), `server` (OpenAI wire, SSE, CORS,
-  optional token), `tui` (setup / settings / lanes / doctor), `cli`.
-- **28 tests green**, including fake-upstream failover, streaming race, best-of selection,
-  enhancement idempotency, capability routing, auth, and config permissions.
-- **Live smoke passed:** keyless default pool returned a completion in ~2.8s through LLM7;
-  `a0/code` SSE streaming passed through chunk-by-chunk.
-- **Docs:** `README.md`, `docs/a0-brief.md`, MIT `LICENSE`.
+## Blocked — needs a decision
+- npm publish needs a human (account access, final name confirmation for `a0-gateway`).
+- Real keyed-lane verification needs the user's keys (Groq, xKiro, Z.ai, Kilo).
 
-## IN PROGRESS
-
-- Session stickiness (one model per client session) is a config flag, not yet enforced.
-- Lane health/cooldown is per-process only; nothing persists between runs.
-
-## BLOCKED — needs a human
-
-- **npm publish.** Needs account access and a final name. `a0` is short and likely taken;
-  decide between the bare name, `a0-cli`, or a scope.
-- **Keyed lanes.** Groq / Gemini / OpenRouter / xKiro are wired but unverified without keys.
-
-## QUEUED NEXT
-
-1. Community skill pack (plan, debug, refactor, test, review, scaffold), loaded on demand.
-2. Session stickiness + persisted lane health/cooldown.
-3. Live status view in the TUI while the server runs.
-4. Parity check, then delete the legacy Go/dashboard tree.
-5. Publish to npm with a one-command `npx a0` install.
+## Queued next
+- Community skill pack (plan/debug/refactor/test/review/scaffold) as versioned markdown.
+- Session stickiness keyed by client/session id.
+- Lane health probing + cooldown persistence.
+- Delete the legacy Go gateway and React dashboard once parity is confirmed.

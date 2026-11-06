@@ -24,7 +24,10 @@ function pool(providers) {
   const out = [];
   for (const p of providers) {
     if (!p.enabled) continue;
-    for (const m of p.models) out.push({ provider: p, model: m });
+    for (const m of p.models) {
+      if (m.enabled === false) continue;
+      out.push({ provider: p, model: m });
+    }
   }
   return out;
 }

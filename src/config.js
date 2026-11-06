@@ -18,9 +18,14 @@ export const DEFAULTS = {
   firstByteTimeoutMs: 25_000,
   maxBodyBytes: 16 * 1024 * 1024,
   routing: {
-    preferKeyless: true,
+    preferKeyless: false,
     sticky: true,
     longContextTokens: 24_000,
+  },
+  updates: {
+    autoCheck: true,
+    autoInstall: false,
+    lastCheck: 0,
   },
   providers: {},
 };

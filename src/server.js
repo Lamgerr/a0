@@ -83,7 +83,13 @@ export function createServer({ cfg, providers, log = () => {} }) {
             enabled: p.enabled,
             keyless: p.keyless,
             has_key: p.hasKey,
-            models: p.models.map((m) => ({ id: m.id, tools: !!m.tools, vision: !!m.vision, context: m.context })),
+            models: p.models.map((m) => ({
+              id: m.id,
+              enabled: m.enabled !== false,
+              tools: !!m.tools,
+              vision: !!m.vision,
+              context: m.context,
+            })),
           })),
         });
         return;

@@ -29,16 +29,18 @@ client from drowning in prose.
 
 ## Surface
 
-- `npx a0` and `npm i -g a0`. Thin npm package that fetches the correct platform binary,
-  the same pattern opencode and esbuild use.
-- First run opens a TUI wizard. Default is the keyless pool. Optional is pasting keys for
-  extra or faster lanes. Writes `~/.a0/config.toml`; keys stored `0600`, never logged.
+- `npx a0-gateway` and `npm i -g a0-gateway`. Plain zero-dependency ESM; the package name is
+  `a0-gateway` because `a0` is an unrelated npm package. The command is still `a0`.
+- First run opens a TUI wizard that recommends legit free keys (Kilo, xKiro, Groq, Z.ai);
+  skipping every key leaves the keyless pool as the working default. Writes
+  `~/.a0/config.json`; keys stored `0600`, never logged.
 - Serves `http://127.0.0.1:8082/v1`. Loopback by default; LAN requires `--host` plus a
   generated token.
 - Wire: `/v1/chat/completions` (SSE, tools, vision, JSON mode, usage), `/v1/models`,
   `/healthz`. OpenAI format exactly, no dialects.
-- TUI status screen: active lanes, headroom, latency, recent errors, which model served what.
-- `a0 doctor` for self-diagnosis. `a0 update` to refresh the lane registry.
+- TUI status screen: active lanes, keyed vs anonymous, model counts, recent errors.
+- `a0 doctor` for self-diagnosis. `a0 update` checks npm and installs the latest release.
+- Per-model selection for keyed lanes; anonymous-pool models stay curated by a0.
 
 ## The intelligence layer — this is the product
 
@@ -97,6 +99,11 @@ token cost; every skill must earn its tokens. Skills encode procedure, not prose
 
 ## Decisions taken (challenge these, do not silently drift)
 
+- Setup leads with **keyed** free-tier providers: Kilo, xKiro, Groq, Z.ai. OpenRouter, MiMo,
+  Alibaba, OpenAI, and Gemini are optional and marked not recommended for free use because
+  their limits or model access are weaker or less predictable.
+- Adding at least one key switches a0 to **keyed mode** and disables the anonymous lanes.
+  Keeping them as a fallback is an explicit opt-in. With no keys, a0 runs keyless.
 - a0 **does** modify requests: it merges an operating contract into the system message on
   every call, idempotently, and it can be disabled.
 - Streaming is the contract. Quality retries happen only before the first token.
@@ -104,5 +111,9 @@ token cost; every skill must earn its tokens. Skills encode procedure, not prose
 - Best-of is available for non-stream calls but defaults to off — it multiplies quota burn.
 - Terse by default is non-negotiable — it is both UX and quota strategy.
 - Model swapping happens between sessions, not mid-turn.
+- Per-model selection is stored as a `disabled` array per provider, only for lanes with a key.
+  Anonymous-pool models cannot be selected: the pool is part of the routing brain.
+- Updates are check-only by default (once a day, non-blocking). `a0 update` installs; automatic
+  install is an explicit opt-in. The updater targets `a0-gateway`, never the unrelated `a0`.
 - No auth by default; a token is generated automatically when binding beyond loopback.
 - MIT license.

@@ -1,5 +1,5 @@
 {
-  "name": "a0",
+  "name": "a0-gateway",
   "version": "0.1.0",
   "description": "Free-first, self-hosted OpenAI-compatible inference gateway with a routing brain",
   "type": "module",

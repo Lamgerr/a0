@@ -1,30 +1,38 @@
 {
   "goal": "a0 v0.1 — free-first, zero-dependency Node/ESM OpenAI-compatible gateway. Local, self-hosted, no auth service, no hosted instance. npm distribution. Pools keyless free lanes, enhances every prompt, routes by capability, races lanes in parallel.",
-  "status": "v0.1 vertical slice implemented and tested: config, provider registry, classifier, prompt enhancer, router, racing relay (stream + best-of), HTTP server, TUI, CLI, 28 tests green, live smoke against LLM7 keyless passed.",
+  "status": "v0.1 feature-complete for the agreed scope: guided setup for legit free keys, per-model selection on keyed lanes, self-updater, 50 tests green, serve smoke passed.",
   "last_actions": [
-    "pivoted product from public multi-tenant service to local self-hosted npm gateway",
-    "wrote docs/a0-brief.md (master brief) and README.md",
-    "chose Node 18+ ESM with zero runtime deps (Go toolchain absent; npm is the target)",
-    "built src/config.js, registry.js, classify.js, enhance.js, router.js, relay.js, server.js, tui.js, cli.js",
-    "built bin/a0.js, package.json, LICENSE (MIT), test suite",
-    "live-tested: /v1/models, non-stream completion, SSE streaming via keyless LLM7"
+    "guided setup wizard: recommended (Kilo, xKiro, Groq, Z.ai) + optional (OpenRouter, MiMo, Alibaba, OpenAI, Gemini) with key URLs and steps",
+    "applySetupMode: keyless default when no keys; adding any key switches to keyed mode and disables anonymous lanes; fallback opt-in",
+    "per-model selection: cfg.providers[id].disabled array, shape()/activeProviders()/catalog()/findModel()/router pool honour it; modelMenu in TUI; anonymous-pool lanes blocked from selection",
+    "self-updater: src/update.js (compareVersions, checkLatest, installLatest, maybeCheck), CLI `a0 update [--check]`, non-blocking daily check on serve, setup/settings prompts, help text",
+    "switched npm package name from `a0` to `a0-gateway` (the `a0` name is an unrelated web framework on npm)",
+    "rewrote TUI input handling as a shared line queue so pasted multi-line input is not dropped",
+    "healthz now reports per-model enabled flags; `a0 models` marks disabled models",
+    "README.md and docs/a0-brief.md updated for model selection, updates, package name, setup guidance",
+    "test/models.test.js (8) and test/update.test.js (12) added; 50 tests total, all green"
   ],
   "next": [
-    "publish prep: confirm npm name availability for 'a0' (may be taken; fall back to a scoped name or a0-cli)",
-    "add the community skill pack (plan/debug/refactor/test/review/scaffold) as versioned markdown loaded on demand",
-    "add session stickiness keyed by client/session id (currently model choice is per request)",
-    "add lane health probing + cooldown persistence (registry of dead lanes)",
-    "add a real TUI status view while the server runs (currently the TUI is setup/config)",
-    "delete the legacy Go gateway and React dashboard once parity is confirmed"
+    "publish prep: npm account access and final name decision (a0-gateway is free on npm)",
+    "community skill pack (plan/debug/refactor/test/review/scaffold) as versioned markdown",
+    "session stickiness keyed by client/session id (currently per request)",
+    "lane health probing + cooldown persistence",
+    "delete legacy Go gateway and React dashboard once parity is confirmed"
   ],
   "blocked": "npm publish needs a human: account access and final package name. Real keyed-lane verification (Groq/Gemini/OpenRouter/xKiro) needs the user's keys.",
   "decisions": [
     "a0 is a provider, not an agent: clients own the agent loop",
-    "a0 modifies every request with an idempotent operating contract (enhancement is on by default)",
+    "a0 modifies every request with an idempotent operating contract (enhancement on by default)",
     "capability gates are hard: no tools to chat-only lanes, no images to text-only lanes",
     "race=2 by default (first usable byte wins, loser aborted); best-of available for non-stream, default off",
     "streaming is the contract; no retry after bytes are sent",
     "loopback by default; a token is auto-generated when binding beyond loopback",
-    "MIT license"
+    "MIT license",
+    "setup leads with keyed free-tier providers (Kilo, xKiro, Groq, Z.ai); OpenRouter, MiMo, Alibaba, OpenAI, Gemini are optional",
+    "adding any key switches to keyed mode and disables anonymous lanes; keeping them as fallback is opt-in",
+    "per-model selection is stored as a disabled array per provider, only for lanes with a key; anonymous-pool models stay curated",
+    "updates are check-only by default (once a day, non-blocking); a0 update installs; auto-install is opt-in",
+    "updater targets a0-gateway, never the unrelated a0 package",
+    "npm package is a0-gateway; the command remains a0"
   ]
 }

@@ -62,5 +62,58 @@ OpenAI-wire HTTP server, TUI, CLI, tests, README, MIT license. 28 tests pass.
 **Verified.** Unit + fake-upstream e2e tests; live keyless smoke against LLM7 (non-stream
 completion ~2.8s, SSE streaming passthrough for `a0/code`); CLI help/models/version.
 
-**Next.** Session stickiness, persisted lane health, community skill pack, npm publish prep,
-then delete legacy Go/dashboard. Blocked: npm account/name and real provider keys.
+## 2026-11-06 — guided setup, per-model selection, self-updater, package rename
+
+**What changed.** Finished the three items left open in the previous entry:
+
+1. Guided setup now leads with legit free keys (Kilo, xKiro, Groq, Z.ai) and offers
+   OpenRouter/MiMo/Alibaba/OpenAI/Gemini as optional, each with its key URL and steps.
+   `applySetupMode` (in src/setup.js) switches to keyed mode when any key is added and
+   disables the anonymous lanes; keeping them as fallback is an explicit opt-in. With no
+   keys, a0 runs keyless. `preferKeyless` defaults to false now.
+
+2. Per-model selection. `cfg.providers[id].disabled` (array of model ids) is applied in
+   `shape()` → `model.enabled`. `activeProviders`, `catalog`, `findModel`, and the router
+   `pool` all skip disabled models. `src/tui.js` gained `modelMenu(cfg, p)` (toggle/all/none,
+   with a guard against disabling the last model on a keyed lane) wired into providerMenu as
+   `models <n>`; anonymous-pool lanes (keyless without a key) are blocked with a message.
+   `capLine` and `a0 models` show enabled/total counts and mark disabled models.
+
+3. Self-updater. `src/update.js`: `compareVersions`, `checkLatest`, `installLatest`,
+   `maybeCheck` (daily, non-blocking). CLI gained `a0 update [--check]`; `serve` runs
+   `maybeCheck` in the background; setup and settings menus prompt for auto-check /
+   auto-install; help documents it. Tests inject fetch/spawn fakes.
+
+**Discovery during the run.** `a0` is already an unrelated web framework on npm (v1.0.0).
+Installing or updating would have pulled the wrong package. Renamed the npm package to
+`a0-gateway` (still free on npm, 404 confirmed) while keeping the command `a0`. Updated
+`PACKAGE` default, package.json, README, and the brief. The updater now targets
+`a0-gateway` exclusively.
+
+**TUI fix.** The per-question readline approach dropped buffered lines when each interface
+closed, so pasted multi-line scripts only ran the first line. Replaced it with a single
+readline interface feeding a line queue (`ensureReader`/`readLine`), which works for both
+interactive typing and piped input. `promptSecret` pauses/closes the reader for raw mode and
+reopens it after.
+
+**Verification.** `npm test` → 50 pass (was 32). PTY-driven end-to-end test: toggled a
+Groq model off via `models 5` → `toggle 1`, persisted `disabled: ["gpt-oss-120b"]`,
+confirmed the anonymous-pool block for Kilo, and `a0 models` renders it as `(off)`.
+Serve smoke: `/healthz` 200 with 11 lanes. `a0 update --check` now targets `a0-gateway`
+and fails gracefully (404) until published.
+
+**Calls I made (challenge if wrong).**
+- Package name `a0-gateway` over `a0-llm-gateway`/`a0-inference`: shorter, matches the
+  product, and the command stays `a0`.
+- Model selection is allowed only on lanes with a key; anonymous-pool lanes are curated by
+  a0. This matches the user's "except anonymous pool models" rule and keeps the pool as
+  the routing brain.
+- Disabling all models on a keyed lane is blocked in the TUI (would make the lane dead);
+  the underlying config still allows it for power users.
+- Updates are check-only by default and never auto-install unless opted in, because
+  replacing a running global npm install mid-session is surprising.
+- Did not publish or touch prod; npm publish still needs a human.
+
+**Next.** Publish prep (account/name), community skill pack, session stickiness keyed by
+client id, lane health persistence, then delete the legacy Go gateway and React dashboard.
+Blocked: npm account access and the user's real provider keys.
