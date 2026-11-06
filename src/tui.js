@@ -366,6 +366,18 @@ export async function selectProviderUI(cfg, title = "Select provider") {
   let selectedIndex = 0;
   let scrollOffset = 0;
 
+  // Enable raw mode for interactive navigation (arrow keys, etc.)
+  const wasRaw = stdin.isTTY && stdin.isRaw;
+  let dataListener = null;
+  if (stdin.isTTY && !stdin.isRaw) {
+    closeInput();
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+    dataListener = (chunk) => { inputBuffer += chunk; processInput(); };
+    stdin.on("data", dataListener);
+  }
+
   function getFiltered() {
     if (!searchQuery) return providers;
     const q = searchQuery.toLowerCase();
@@ -409,6 +421,7 @@ export async function selectProviderUI(cfg, title = "Select provider") {
       const filtered = getFiltered();
       if (ev.type === "char") {
         if (ev.char === "a" && !searchQuery) {
+          if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
           resolve({ type: "add_custom" });
           return;
         }
@@ -417,11 +430,17 @@ export async function selectProviderUI(cfg, title = "Select provider") {
         scrollOffset = 0;
         render();
       } else if (ev.type === "key") {
-        if (ev.key === "escape") resolve(null);
+        if (ev.key === "escape") {
+          if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+          resolve(null);
+        }
         else if (ev.key === "\x1b[A") { selectedIndex = Math.max(0, selectedIndex - 1); render(); }
         else if (ev.key === "\x1b[B") { selectedIndex = Math.min(Math.max(0, filtered.length - 1), selectedIndex + 1); render(); }
         else if (ev.key === "enter") {
-          if (filtered.length > 0) resolve({ type: "select", provider: filtered[selectedIndex] });
+          if (filtered.length > 0) {
+            if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+            resolve({ type: "select", provider: filtered[selectedIndex] });
+          }
         } else if (ev.key === "backspace") { searchQuery = searchQuery.slice(0, -1); selectedIndex = 0; scrollOffset = 0; render(); }
         else if (ev.key === " ") { searchQuery += " "; render(); }
       }

@@ -1,6 +1,6 @@
 {
   "name": "a0-gateway",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Self-hosted OpenAI-compatible inference gateway with capability routing, parallel racing, and prompt enhancement",
   "type": "module",
   "bin": {
