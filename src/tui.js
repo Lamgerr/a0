@@ -696,15 +696,23 @@ export async function runTUI(cfg) {
   }
 
   setKeyHandler((ev) => {
-    if (ev.type === "key") {
-      if (ev.key === "escape") { currentView = "dashboard"; render(); }
-      else if (ev.key === "\x1b[A" || ev.char === "k") { menuIndex = Math.max(0, menuIndex - 1); render(); }
-      else if (ev.key === "\x1b[B" || ev.char === "j") { menuIndex = Math.min(MENU_ITEMS.length - 1, menuIndex + 1); render(); }
-      else if (ev.key === "enter" || ev.char === " ") {
+    if (ev.type === "char") {
+      if (ev.char === "k") { menuIndex = Math.max(0, menuIndex - 1); render(); }
+      else if (ev.char === "j") { menuIndex = Math.min(MENU_ITEMS.length - 1, menuIndex + 1); render(); }
+      else if (ev.char === " ") {
         const item = MENU_ITEMS[menuIndex];
         if (item.id === "quit") { cleanup(); process.exit(0); }
         else { currentView = item.id; render(); }
       } else if (ev.char === "q" && currentView === "dashboard") { cleanup(); process.exit(0); }
+    } else if (ev.type === "key") {
+      if (ev.key === "escape") { currentView = "dashboard"; render(); }
+      else if (ev.key === "\x1b[A") { menuIndex = Math.max(0, menuIndex - 1); render(); }
+      else if (ev.key === "\x1b[B") { menuIndex = Math.min(MENU_ITEMS.length - 1, menuIndex + 1); render(); }
+      else if (ev.key === "enter") {
+        const item = MENU_ITEMS[menuIndex];
+        if (item.id === "quit") { cleanup(); process.exit(0); }
+        else { currentView = item.id; render(); }
+      }
     } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
       // Sidebar click
       if (ev.col >= 2 && ev.col <= 24 && ev.row >= 4 && ev.row < 4 + MENU_ITEMS.length) {
