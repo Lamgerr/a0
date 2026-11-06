@@ -6,6 +6,7 @@
   "bin": {
     "a0": "bin/a0.js"
   },
+  "dependencies": {},
   "engines": {
     "node": ">=18"
   },
@@ -17,7 +18,6 @@
     "llm",
     "openai",
     "gateway",
-    "free",
     "self-hosted",
     "coding-agent",
     "router"
@@ -28,6 +28,5 @@
     "src",
     "README.md",
     "docs/a0-brief.md"
-  ],
-  "dependencies": {}
+  ]
 }

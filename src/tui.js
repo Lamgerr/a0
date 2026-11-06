@@ -117,7 +117,7 @@ async function ask(question, def = "") {
   return answer === "" ? String(def) : answer;
 }
 async function confirm(question, def = true) {
-  const answer = (await ask(`${question} ${dim("(y/n)")}`, def ? "y" : "n")).toLowerCase();
+  const answer = (await ask(`${question} (y/n)`, def ? "y" : "n")).toLowerCase();
   return answer === "y" || answer === "yes";
 }
 export function promptSecret(question) {
@@ -145,7 +145,7 @@ export function promptSecret(question) {
 export function clear() { if (tty) stdout.write("\x1b[2J\x1b[H"); }
 export function banner() {
   clear();
-  stdout.write(`\n${bold(fg.cyan("  a0"))} ${dim(`v${VERSION}`)}\n${dim("  OpenAI-compatible inference gateway")}\n`);
+  stdout.write(`\n  a0  v${VERSION}\n  OpenAI-compatible inference gateway\n`);
 }
 function drawBox(r, col, w, h, title = "") {
   let top = BOX.tl;
@@ -167,25 +167,25 @@ function drawStatusBar(items) {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 function tierLabel(p) {
-  if (p.tier === "recommended") return fg.green("recommended");
-  if (p.tier === "keyless") return dim("keyless");
-  if (p.tier === "local") return fg.cyan("local");
-  return fg.yellow("optional");
+  if (p.tier === "recommended") return "recommended";
+  if (p.tier === "keyless") return "keyless";
+  if (p.tier === "local") return "local";
+  return "optional";
 }
 function capLine(p) {
   const caps = [tierLabel(p)];
-  if (p.hasKey) caps.push(dim(`key ${mask(p.key)}`));
-  else if (p.keyless) caps.push(dim("anonymous"));
-  if (!p.freeTier) caps.push(fg.red("paid"));
+  if (p.hasKey) caps.push(`key ${mask(p.key)}`);
+  else if (p.keyless) caps.push("anonymous");
+  if (!p.freeTier) caps.push("paid");
   const { enabled, total } = modelCounts(p);
-  if (p.keyless && !p.hasKey) caps.push(dim(`${total} curated`));
-  else caps.push(dim(enabled === total ? `${total} models` : `${enabled}/${total} models`));
+  if (p.keyless && !p.hasKey) caps.push(`${total} curated`);
+  else caps.push(enabled === total ? `${total} models` : `${enabled}/${total} models`);
   return caps.join(" · ");
 }
 function providerList(providers) {
   return providers.map((p, i) => {
-    const n = bold(String(i + 1).padStart(2));
-    return `  ${n}. ${p.enabled ? fg.green("●") : dim("○")} ${p.label.padEnd(18)} ${capLine(p)}`;
+    const n = String(i + 1).padStart(2);
+    return `  ${n}. ${p.enabled ? "●" : "○"} ${p.label.padEnd(18)} ${capLine(p)}`;
   }).join("\n");
 }
 function saveKey(cfg, id, key) { cfg.providers[id] = { ...(cfg.providers[id] || {}), key, enabled: true }; }
@@ -197,187 +197,45 @@ function testProvider(p) {
     .catch((err) => ({ ok: false, status: err.name === "TimeoutError" ? "timeout" : err.message, ms: Date.now() - started }));
 }
 
-// ── searchable provider selector ──────────────────────────────────────────
-// Returns selected provider object or null (if cancelled / add custom)
-export async function selectProviderUI(cfg, title = "Select provider") {
-  const providers = resolveProviders(cfg);
-  let searchQuery = "";
-  let selectedIndex = 0;
-  let scrollOffset = 0;
-  const pageSize = () => termSize().h - 8;
-
-  function getFiltered() {
-    if (!searchQuery) return providers;
-    const q = searchQuery.toLowerCase();
-    return providers.filter((p) => p.label.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || (p.tier || "").toLowerCase().includes(q));
-  }
-
-  return new Promise((resolve) => {
-    const render = () => {
-      const { w, h } = termSize();
-      stdout.write(CLEAR);
-      writeAt(1, 1, `${ESC}[1;36m  ${title}${" ".repeat(Math.max(0, w - title.length - 4))}${RESET}`);
-      writeAt(2, 2, `${dim("Type to search · ↑↓ navigate · Enter select · a add custom · Esc cancel")}`);
-
-      const filtered = getFiltered();
-      if (selectedIndex >= filtered.length) selectedIndex = Math.max(0, filtered.length - 1);
-
-      // Search bar
-      const searchLine = `  Search: ${searchQuery}█`;
-      writeAt(4, 2, searchLine.padEnd(w - 2));
-
-      // Provider list
-      const listStart = 6;
-      const visibleCount = h - listStart - 2;
-      if (selectedIndex < scrollOffset) scrollOffset = selectedIndex;
-      if (selectedIndex >= scrollOffset + visibleCount) scrollOffset = selectedIndex - visibleCount + 1;
-
-      for (let i = 0; i < visibleCount && i + scrollOffset < filtered.length; i++) {
-        const idx = i + scrollOffset;
-        const p = filtered[idx];
-        const isSelected = idx === selectedIndex;
-        const prefix = isSelected ? "▸ " : "  ";
-        const style = isSelected ? `${ESC}[1;32m` : "";
-        const state = p.enabled ? fg.green("●") : dim("○");
-        const tier = p.tier === "recommended" ? fg.green("rec") : p.tier === "keyless" ? dim("key") : p.tier === "local" ? fg.cyan("loc") : fg.yellow("opt");
-        const line = `${prefix}${state} ${p.label.padEnd(20)} ${tier.padEnd(12)} ${dim(p.baseUrl.replace(/^https?:\/\//, "").slice(0, 30))}`;
-        writeAt(listStart + i, 2, `${style}${truncate(line, w - 4)}${RESET}`);
-      }
-
-      // Footer
-      writeAt(h - 1, 2, `${dim(`${filtered.length} providers · ${searchQuery ? "filtered" : "all"}`)}`);
-      drawStatusBar([`${dim("↑↓")} navigate`, `${dim("Enter")} select`, `${dim("a")} add custom`, `${dim("Esc")} cancel`, `${dim("Type")} search`]);
-    };
-
-    const cleanupUI = () => {
-      cleanup();
-      // Restore line-based input
-    };
-
-    setKeyHandler((ev) => {
-      const filtered = getFiltered();
-      if (ev.type === "char") {
-        if (ev.char === "a" && !searchQuery) {
-          // Add custom provider
-          cleanupUI();
-          resolve({ type: "add_custom" });
-          return;
-        }
-        searchQuery += ev.char;
-        selectedIndex = 0;
-        scrollOffset = 0;
-        render();
-      } else if (ev.type === "key") {
-        if (ev.key === "escape") {
-          cleanupUI();
-          resolve(null);
-        } else if (ev.key === "\x1b[A") { // up
-          selectedIndex = Math.max(0, selectedIndex - 1);
-          render();
-        } else if (ev.key === "\x1b[B") { // down
-          selectedIndex = Math.min(filtered.length - 1, selectedIndex + 1);
-          render();
-        } else if (ev.key === "enter") {
-          if (filtered.length > 0) {
-            cleanupUI();
-            resolve({ type: "select", provider: filtered[selectedIndex] });
-          }
-        } else if (ev.key === "backspace") {
-          searchQuery = searchQuery.slice(0, -1);
-          selectedIndex = 0;
-          scrollOffset = 0;
-          render();
-        } else if (ev.key === " ") {
-          searchQuery += " ";
-          render();
-        }
-      } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
-        const listStart = 6;
-        const visibleCount = termSize().h - listStart - 2;
-        if (ev.row >= listStart && ev.row < listStart + visibleCount) {
-          const idx = ev.row - listStart + scrollOffset;
-          if (idx >= 0 && idx < filtered.length) {
-            selectedIndex = idx;
-            render();
-          }
-        }
-      } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0 && ev.row === termSize().h - 1) {
-        // Double-click to select
-      }
-    });
-
-    // Double-click detection
-    let lastClick = 0;
-    const origHandler = keyHandler;
-    // Override to handle double-click
-    setKeyHandler((ev) => {
-      if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
-        const now = Date.now();
-        const listStart = 6;
-        const visibleCount = termSize().h - listStart - 2;
-        if (ev.row >= listStart && ev.row < listStart + visibleCount) {
-          const idx = ev.row - listStart + scrollOffset;
-          const filtered = getFiltered();
-          if (idx >= 0 && idx < filtered.length) {
-            if (now - lastClick < 400 && idx === selectedIndex) {
-              // Double click - select
-              cleanupUI();
-              resolve({ type: "select", provider: filtered[idx] });
-              return;
-            }
-            selectedIndex = idx;
-            lastClick = now;
-            render();
-            return;
-          }
-        }
-      }
-      origHandler(ev);
-    });
-
-    render();
-  });
-}
-
 // ── setup wizard ──────────────────────────────────────────────────────────
-export async function setupWizard(cfg) {
+export async function setupWizard(cfg) { /* (same as before, condensed) */
   banner();
-  stdout.write(`\n${bold("Setup")}\n\na0 operates in two modes:\n  ${fg.green("keyed")}      provider API keys — better models, higher limits, failover\n  ${dim("keyless")}    anonymous free lanes, no signup required\n\nAdd at least two keys for racing and failover. Press enter to skip any key.\n`);
+  stdout.write(`\nSetup\n\na0 operates in two modes:\n  keyed      provider API keys — better models, higher limits, failover\n  keyless    anonymous free lanes, no signup required\n\nAdd at least two keys for racing and failover. Press enter to skip any key.\n`);
   const providers = resolveProviders(cfg);
-  stdout.write(`\n${bold("Recommended providers")}\n`);
+  stdout.write(`\nRecommended providers\n`);
   for (const p of recommended(providers)) {
-    stdout.write(`\n  ${bold(p.label)}  ${dim("· recommended")}\n`);
-    for (const line of guideLines(p)) stdout.write(`    ${dim(line)}\n`);
-    const key = (await promptSecret(`    Paste key ${dim("(enter to skip)")} `)).trim();
-    if (key) { saveKey(cfg, p.id, key); stdout.write(`    ${fg.green("✓")} ${p.label} enabled\n`); }
+    stdout.write(`\n  ${p.label}  · recommended\n`);
+    for (const line of guideLines(p)) stdout.write(`    ${line}\n`);
+    const key = (await promptSecret(`    Paste key (enter to skip): `)).trim();
+    if (key) { saveKey(cfg, p.id, key); stdout.write(`    ✓ ${p.label} enabled\n`); }
   }
   const wantsOptional = await confirm("\nConfigure optional providers too?", false);
   if (wantsOptional) {
     for (const p of optional(providers)) {
-      stdout.write(`\n  ${bold(p.label)}  ${dim("· optional")}\n`);
-      for (const line of guideLines(p)) stdout.write(`    ${dim(line)}\n`);
-      const key = (await promptSecret(`    Paste key ${dim("(enter to skip)")} `)).trim();
-      if (key) { saveKey(cfg, p.id, key); stdout.write(`    ${fg.green("✓")} ${p.label} enabled\n`); }
+      stdout.write(`\n  ${p.label}  · optional\n`);
+      for (const line of guideLines(p)) stdout.write(`    ${line}\n`);
+      const key = (await promptSecret(`    Paste key (enter to skip): `)).trim();
+      if (key) { saveKey(cfg, p.id, key); stdout.write(`    ✓ ${p.label} enabled\n`); }
     }
   }
   const mode = applySetupMode(cfg);
-  stdout.write(`\n${bold("Mode")}  ${mode.mode === "keyed" ? fg.green(modeSummary(mode)) : dim(modeSummary(mode))}\n`);
+  stdout.write(`\nMode  ${modeSummary(mode)}\n`);
   if (mode.mode === "keyed") {
     const keep = await confirm("Keep anonymous lanes on as a fallback?", false);
     if (keep) { for (const id of mode.disabled) cfg.providers[id] = { ...(cfg.providers[id] || {}), enabled: true }; cfg.routing.preferKeyless = true; }
   }
-  stdout.write(`\n${bold("Server")}\n`);
+  stdout.write(`\nServer\n`);
   cfg.port = Number.parseInt(await ask("Port", String(cfg.port)), 10) || cfg.port;
   cfg.host = await ask("Bind host", cfg.host);
-  stdout.write(`\n${bold("Behaviour")}\n`);
+  stdout.write(`\nBehaviour\n`);
   cfg.enhance = await confirm("Enhance every prompt", cfg.enhance);
   cfg.race = Math.min(4, Math.max(1, Number.parseInt(await ask("Lanes raced in parallel", String(cfg.race)), 10) || cfg.race));
-  stdout.write(`\n${bold("Updates")}\n`);
+  stdout.write(`\nUpdates\n`);
   cfg.updates = cfg.updates || {};
   cfg.updates.autoCheck = await confirm("Check for updates on startup", cfg.updates.autoCheck !== false);
   cfg.updates.autoInstall = await confirm("Install updates automatically", Boolean(cfg.updates.autoInstall));
   const file = persist(cfg);
-  stdout.write(`\n${fg.green("✓")} saved ${dim(file)}\n`);
+  stdout.write(`\n✓ saved ${file}\n`);
   await ask("Press enter to start a0", "");
   return cfg;
 }
@@ -386,12 +244,12 @@ export async function setupWizard(cfg) {
 export async function modelMenu(cfg, p) {
   banner();
   if (p.keyless && !p.hasKey) {
-    stdout.write(`\n  ${bold(p.label)} is part of the anonymous pool.\n  ${dim("Models are curated and cannot be selected individually.")}\n  ${dim("Add a key to unlock per-model selection.")}\n${p.setup?.url ? `\n  ${dim("Get a key:")} ${p.setup.url}\n` : ""}\n`);
+    stdout.write(`\n  ${p.label} is part of the anonymous pool.\n  Models are curated and cannot be selected individually.\n  Add a key to unlock per-model selection.\n${p.setup?.url ? `\n  Get a key: ${p.setup.url}\n` : ""}\n`);
     await ask("Press enter", "");
     return;
   }
   if (!p.hasKey) {
-    stdout.write(`\n  ${bold(p.label)} has no key.\n  ${dim("Add a key first:")} ${p.setup?.url || dim("see guide")}\n`);
+    stdout.write(`\n  ${p.label} has no key.\n  Add a key first: ${p.setup?.url || "see guide"}\n`);
     await ask("Press enter", "");
     return;
   }
@@ -399,14 +257,14 @@ export async function modelMenu(cfg, p) {
     banner();
     const fresh = resolveProviders(cfg).find((x) => x.id === p.id) || p;
     const { enabled, total } = modelCounts(fresh);
-    stdout.write(`\n${bold(`${fresh.label} models`)}\n\n`);
+    stdout.write(`\n${fresh.label} models\n\n`);
     for (const [i, m] of fresh.models.entries()) {
       const on = m.enabled !== false;
       const caps = [m.tools ? "tools" : "", m.vision ? "vision" : "", m.fast ? "fast" : ""].filter(Boolean).join(",");
       const meta = `${Math.round((m.context || 0) / 1000)}k${caps ? ` · ${caps}` : ""}`;
-      stdout.write(`  ${on ? fg.green("●") : dim("○")} ${bold(String(i + 1).padStart(2))}. ${m.id.padEnd(34)} ${dim(meta)}\n`);
+      stdout.write(`  ${on ? "●" : "○"} ${String(i + 1).padStart(2)}. ${m.id.padEnd(34)} ${meta}\n`);
     }
-    stdout.write(`\n  ${dim(`${enabled}/${total} enabled · toggle <n> · all · none · add · back`)}\n`);
+    stdout.write(`\n  ${enabled}/${total} enabled · toggle <n> · all · none · add · back\n`);
     const input = (await ask("Command", "back")).trim().toLowerCase();
     const [cmd, arg] = input.split(/\s+/);
     if (cmd === "back" || cmd === "b") return;
@@ -430,7 +288,7 @@ export async function modelMenu(cfg, p) {
       override.models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
       cfg.providers[fresh.id] = override;
       persist(cfg);
-      stdout.write(`    ${fg.green("✓")} ${modelId} added\n`);
+      stdout.write(`    ✓ ${modelId} added\n`);
       await ask("Press enter", "");
       continue;
     }
@@ -439,7 +297,7 @@ export async function modelMenu(cfg, p) {
     if (!model) continue;
     if (cmd === "toggle" || cmd === "t") {
       const next = model.enabled === false;
-      if (!next && enabled === 1) { stdout.write(`\n  ${fg.yellow("At least one model must stay enabled.")}\n`); await ask("Press enter", ""); continue; }
+      if (!next && enabled === 1) { stdout.write(`\n  At least one model must stay enabled.\n`); await ask("Press enter", ""); continue; }
       setModelEnabled(cfg, fresh.id, model.id, next, ids);
       persist(cfg);
     }
@@ -451,7 +309,7 @@ export async function providerMenu(cfg) {
   for (;;) {
     banner();
     const providers = resolveProviders(cfg);
-    stdout.write(`\n${bold("Lanes")}\n${providerList(providers)}\n\n  ${dim("toggle <n> · key <n> · models <n> · guide <n> · test <n> · testall · back")}\n`);
+    stdout.write(`\nLanes\n${providerList(providers)}\n\n  toggle <n> · key <n> · models <n> · guide <n> · test <n> · testall · back\n`);
     const input = (await ask("Command", "back")).trim().toLowerCase();
     const [cmd, arg] = input.split(/\s+/);
     if (cmd === "back" || cmd === "b") return;
@@ -459,7 +317,7 @@ export async function providerMenu(cfg) {
       stdout.write("\n");
       for (const p of providers.filter((x) => x.enabled)) {
         const r = await testProvider(p);
-        stdout.write(`  ${r.ok ? fg.green("✓") : fg.red("✗")} ${p.label.padEnd(18)} ${r.status} ${dim(`${r.ms}ms`)}\n`);
+        stdout.write(`  ${r.ok ? "✓" : "✗"} ${p.label.padEnd(18)} ${r.status} ${r.ms}ms\n`);
       }
       await ask("\nPress enter", "");
       continue;
@@ -481,7 +339,7 @@ export async function providerMenu(cfg) {
       const key = (await promptSecret(`  ${p.label} API key ${p.hasKey ? `(current ${mask(p.key)})` : ""}: `)).trim();
       if (key) { saveKey(cfg, p.id, key); persist(cfg); }
     } else if (cmd === "guide" || cmd === "g") {
-      stdout.write(`\n  ${bold(p.label)}  ${tierLabel(p)}\n`);
+      stdout.write(`\n  ${p.label}  ${tierLabel(p)}\n`);
       for (const line of guideLines(p)) stdout.write(`    ${line}\n`);
       await ask("\nPress enter", "");
     } else if (cmd === "models" || cmd === "m") {
@@ -495,38 +353,107 @@ export async function providerMenu(cfg) {
       } else await modelMenu(cfg, p);
     } else if (cmd === "test") {
       const r = await testProvider(p);
-      stdout.write(`  ${r.ok ? fg.green("✓ reachable") : fg.red(`✗ ${r.status}`)} ${dim(`${r.ms}ms`)}\n`);
+      stdout.write(`  ${r.ok ? "✓ reachable" : `✗ ${r.status}`} ${r.ms}ms\n`);
       await ask("Press enter", "");
     }
   }
 }
 
-// ── add provider wizard (using searchable selector) ────────────────────────
-export async function addProviderWizard(cfg) {
-  // Use the searchable provider selector
-  const result = await selectProviderUI(cfg, "Add provider");
-  if (!result) return; // cancelled
+// ── searchable provider selector ──────────────────────────────────────────
+export async function selectProviderUI(cfg, title = "Select provider") {
+  const providers = resolveProviders(cfg);
+  let searchQuery = "";
+  let selectedIndex = 0;
+  let scrollOffset = 0;
 
+  function getFiltered() {
+    if (!searchQuery) return providers;
+    const q = searchQuery.toLowerCase();
+    return providers.filter((p) =>
+      p.label.toLowerCase().includes(q) ||
+      p.id.toLowerCase().includes(q) ||
+      (p.tier || "").toLowerCase().includes(q) ||
+      (p.note || "").toLowerCase().includes(q)
+    );
+  }
+
+  return new Promise((resolve) => {
+    const render = () => {
+      const { w, h } = termSize();
+      stdout.write(CLEAR);
+      writeAt(1, 1, `  ${title}`.padEnd(w));
+      writeAt(2, 2, `Type to search · ↑↓ navigate · Enter select · a add custom · Esc cancel`);
+      const filtered = getFiltered();
+      if (selectedIndex >= filtered.length) selectedIndex = Math.max(0, filtered.length - 1);
+      writeAt(4, 2, `  Search: ${searchQuery}█`.padEnd(w - 2));
+      const listStart = 6;
+      const visibleCount = Math.max(1, h - listStart - 3);
+      if (selectedIndex < scrollOffset) scrollOffset = selectedIndex;
+      if (selectedIndex >= scrollOffset + visibleCount) scrollOffset = selectedIndex - visibleCount + 1;
+      for (let i = 0; i < visibleCount; i++) {
+        const idx = i + scrollOffset;
+        if (idx >= filtered.length) { writeAt(listStart + i, 2, " ".repeat(w - 2)); continue; }
+        const p = filtered[idx];
+        const isSelected = idx === selectedIndex;
+        const prefix = isSelected ? "▸ " : "  ";
+        const state = p.enabled ? "●" : "○";
+        const tier = p.tier === "recommended" ? "rec" : p.tier === "keyless" ? "key" : p.tier === "local" ? "loc" : "opt";
+        const line = `${prefix}${state} ${p.label.padEnd(20)} ${tier.padEnd(10)} ${p.baseUrl.replace(/^https?:\/\//, "").slice(0, 35)}`;
+        writeAt(listStart + i, 2, truncate(line, w - 4));
+      }
+      writeAt(h - 2, 2, `${filtered.length} of ${providers.length} providers`.padEnd(w - 2));
+      drawStatusBar(["↑↓ navigate", "Enter select", "a add custom", "Esc cancel", "Type search"]);
+    };
+
+    setKeyHandler((ev) => {
+      const filtered = getFiltered();
+      if (ev.type === "char") {
+        if (ev.char === "a" && !searchQuery) {
+          resolve({ type: "add_custom" });
+          return;
+        }
+        searchQuery += ev.char;
+        selectedIndex = 0;
+        scrollOffset = 0;
+        render();
+      } else if (ev.type === "key") {
+        if (ev.key === "escape") resolve(null);
+        else if (ev.key === "\x1b[A") { selectedIndex = Math.max(0, selectedIndex - 1); render(); }
+        else if (ev.key === "\x1b[B") { selectedIndex = Math.min(Math.max(0, filtered.length - 1), selectedIndex + 1); render(); }
+        else if (ev.key === "enter") {
+          if (filtered.length > 0) resolve({ type: "select", provider: filtered[selectedIndex] });
+        } else if (ev.key === "backspace") { searchQuery = searchQuery.slice(0, -1); selectedIndex = 0; scrollOffset = 0; render(); }
+        else if (ev.key === " ") { searchQuery += " "; render(); }
+      }
+    });
+
+    render();
+  });
+}
+
+// ── add provider wizard ────────────────────────────────────────────────────
+export async function addProviderWizard(cfg) {
+  const result = await selectProviderUI(cfg, "Add provider");
+  if (!result) return;
   if (result.type === "add_custom") {
-    // Custom provider flow
     banner();
-    stdout.write(`\n${bold("Add custom provider")}\n\n`);
+    stdout.write(`\nAdd custom provider\n\n`);
     const id = (await ask("Provider id (slug, lowercase)")).trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
     if (!id) return;
-    if (cfg.providers[id]) { stdout.write(`  ${fg.yellow("Provider")} ${bold(id)} ${fg.yellow("already exists.")}\n`); await ask("Press enter", ""); return; }
+    if (cfg.providers[id]) { stdout.write(`  Provider ${id} already exists.\n`); await ask("Press enter", ""); return; }
     const label = (await ask("Display name", id)) || id;
     const baseUrl = (await ask("Base URL (OpenAI-compatible)")).trim().replace(/\/+$/, "");
-    if (!baseUrl) { stdout.write(`  ${fg.red("Base URL is required.")}\n`); await ask("Press enter", ""); return; }
+    if (!baseUrl) { stdout.write(`  Base URL is required.\n`); await ask("Press enter", ""); return; }
     const keyless = await confirm("Is this provider keyless (no API key)?", false);
     let key = "", keyEnv = "";
     if (!keyless) {
-      key = (await promptSecret(`  API key ${dim("(enter to skip)")} `)).trim();
+      key = (await promptSecret(`  API key (enter to skip): `)).trim();
       keyEnv = (await ask("Env var name for the key (optional)")).trim();
     }
     const tier = (await ask("Tier (local/optional/recommended)", keyless ? "local" : "optional")).trim().toLowerCase();
     const validTier = ["local", "optional", "recommended", "keyless"].includes(tier) ? tier : "optional";
     const models = [];
-    stdout.write(`\n${bold("Models")} ${dim("(add at least one; empty id to finish)")}\n`);
+    stdout.write(`\nModels (add at least one; empty id to finish)\n`);
     for (;;) {
       const modelId = (await ask("  Model id")).trim();
       if (!modelId) break;
@@ -536,53 +463,49 @@ export async function addProviderWizard(cfg) {
       const quality = Math.min(5, Math.max(1, Number.parseInt(await ask("    Quality 1-5", "3"), 10) || 3));
       const fast = await confirm("    Fast lane?", false);
       models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
-      stdout.write(`    ${fg.green("✓")} ${modelId} added\n`);
+      stdout.write(`    ✓ ${modelId} added\n`);
     }
-    if (models.length === 0) { stdout.write(`  ${fg.yellow("No models added; provider not saved.")}\n`); await ask("Press enter", ""); return; }
+    if (models.length === 0) { stdout.write(`  No models added; provider not saved.\n`); await ask("Press enter", ""); return; }
     cfg.providers[id] = { baseUrl, ...(key ? { key } : {}), ...(keyEnv ? { keyEnv } : {}), models, enabled: true, tier: validTier, keyless, label, freeTier: true, rpm: 30, note: "custom lane", setup: { url: baseUrl, note: "custom lane" } };
     persist(cfg);
-    stdout.write(`\n${fg.green("✓")} provider ${bold(id)} saved with ${models.length} model(s)\n`);
+    stdout.write(`\n✓ provider ${id} saved with ${models.length} model(s)\n`);
     await ask("Press enter", "");
     return;
   }
-
-  // Selected an existing provider - configure it
   const p = result.provider;
   banner();
-  stdout.write(`\n${bold(p.label)}  ${tierLabel(p)}\n\n`);
-  stdout.write(`  ${dim("Base URL:")} ${p.baseUrl}\n`);
-  stdout.write(`  ${dim("Status:")}   ${p.enabled ? fg.green("enabled") : dim("disabled")}\n`);
-  stdout.write(`  ${dim("Key:")}      ${p.hasKey ? mask(p.key) : dim("none")}\n`);
-  stdout.write(`  ${dim("Models:")}   ${modelCounts(p).enabled}/${modelCounts(p).total}\n\n`);
-  for (const line of guideLines(p)) stdout.write(`  ${dim(line)}\n`);
+  stdout.write(`\n${p.label}\n\n`);
+  stdout.write(`  Base URL: ${p.baseUrl}\n`);
+  stdout.write(`  Status:   ${p.enabled ? "enabled" : "disabled"}\n`);
+  stdout.write(`  Key:      ${p.hasKey ? mask(p.key) : "none"}\n`);
+  stdout.write(`  Models:   ${modelCounts(p).enabled}/${modelCounts(p).total}\n\n`);
+  for (const line of guideLines(p)) stdout.write(`  ${line}\n`);
   stdout.write("\n");
-
   const action = await ask("Action (key/toggle/models/test/back)", "back");
   cfg.providers[p.id] = cfg.providers[p.id] || {};
   if (action === "key" || action === "k") {
     const key = (await promptSecret(`  ${p.label} API key ${p.hasKey ? `(current ${mask(p.key)})` : ""}: `)).trim();
-    if (key) { saveKey(cfg, p.id, key); persist(cfg); stdout.write(`  ${fg.green("✓")} key saved\n`); }
+    if (key) { saveKey(cfg, p.id, key); persist(cfg); stdout.write(`  ✓ key saved\n`); }
   } else if (action === "toggle" || action === "t") {
     cfg.providers[p.id].enabled = !p.enabled;
     persist(cfg);
-    stdout.write(`  ${fg.green("✓")} ${cfg.providers[p.id].enabled ? "enabled" : "disabled"}\n`);
+    stdout.write(`  ✓ ${cfg.providers[p.id].enabled ? "enabled" : "disabled"}\n`);
   } else if (action === "models" || action === "m") {
     await modelMenu(cfg, p);
   } else if (action === "test") {
     const r = await testProvider(p);
-    stdout.write(`  ${r.ok ? fg.green("✓ reachable") : fg.red(`✗ ${r.status}`)} ${dim(`${r.ms}ms`)}\n`);
+    stdout.write(`  ${r.ok ? "✓ reachable" : `✗ ${r.status}`} ${r.ms}ms\n`);
   }
   await ask("Press enter", "");
 }
 
 export async function addModelWizard(cfg) {
-  // Use provider selector
   const result = await selectProviderUI(cfg, "Add model to provider");
   if (!result || result.type !== "select") return;
   const p = result.provider;
   cfg.providers[p.id] = cfg.providers[p.id] || {};
   banner();
-  stdout.write(`\n${bold(`Add model to ${p.label}`)}\n\n`);
+  stdout.write(`\nAdd model to ${p.label}\n\n`);
   const modelId = (await ask("Model id")).trim();
   if (!modelId) return;
   const context = Number.parseInt(await ask("Context tokens", "32000"), 10) || 32000;
@@ -594,7 +517,7 @@ export async function addModelWizard(cfg) {
   if (!Array.isArray(override.models)) override.models = p.models.map((m) => { const { providerId, providerLabel, keyless, enabled, ...rest } = m; return rest; });
   override.models.push({ id: modelId, label: modelId, context, tools, vision, quality, fast });
   persist(cfg);
-  stdout.write(`\n${fg.green("✓")} model ${bold(modelId)} added to ${p.label}\n`);
+  stdout.write(`\n✓ model ${modelId} added to ${p.label}\n`);
   await ask("Press enter", "");
 }
 
@@ -602,7 +525,7 @@ export async function addModelWizard(cfg) {
 export async function settingsMenu(cfg) {
   for (;;) {
     banner();
-    stdout.write(`\n${bold("Settings")}\n\n  1. Lanes, keys, and models\n  2. Behaviour      ${dim(`enhance=${cfg.enhance} clean=${cfg.cleanOutput}`)}\n  3. Performance    ${dim(`race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}`)}\n  4. Server         ${dim(`${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}`)}\n  5. Routing        ${dim(`keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}`)}\n  6. Updates        ${dim(`auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}`)}\n  7. Providers      ${dim("search & select from 46+ providers")}\n  8. Add model      ${dim("add a model to a provider")}\n  9. Show config    ${dim("secrets masked")}\n  10. Save and exit\n  11. Exit without saving\n`);
+    stdout.write(`\nSettings\n\n  1. Lanes, keys, and models\n  2. Behaviour      enhance=${cfg.enhance} clean=${cfg.cleanOutput}\n  3. Performance    race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}\n  4. Server         ${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}\n  5. Routing        keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}\n  6. Updates        auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}\n  7. Providers      search & select from 46+ providers\n  8. Add model      add a model to a provider\n  9. Show config    secrets masked\n  10. Save and exit\n  11. Exit without saving\n`);
     const choice = await ask("Choice", "10");
     if (choice === "1") await providerMenu(cfg);
     else if (choice === "2") { cfg.enhance = await confirm("Enhance every prompt", cfg.enhance); cfg.cleanOutput = await confirm("Strip filler from non-stream answers", cfg.cleanOutput); }
@@ -628,7 +551,7 @@ export async function settingsMenu(cfg) {
     } else if (choice === "7") await addProviderWizard(cfg);
     else if (choice === "8") await addModelWizard(cfg);
     else if (choice === "9") { stdout.write(`\n${JSON.stringify(redact(cfg), null, 2)}\n`); await ask("\nPress enter", ""); }
-    else if (choice === "10") { const file = persist(cfg); stdout.write(`\n${fg.green("✓")} saved ${dim(file)}\n`); return cfg; }
+    else if (choice === "10") { const file = persist(cfg); stdout.write(`\n✓ saved ${file}\n`); return cfg; }
     else if (choice === "11") return cfg;
   }
 }
@@ -637,11 +560,11 @@ export async function settingsMenu(cfg) {
 export async function showUpdateCheck(cfg) {
   const result = await checkLatest();
   cfg.updates = { ...(cfg.updates || {}), lastCheck: Date.now() };
-  if (!result.ok) { stdout.write(`\n  ${fg.red("✗")} update check failed: ${result.error || result.status}\n`); return result; }
+  if (!result.ok) { stdout.write(`\n  ✗ update check failed: ${result.error || result.status}\n`); return result; }
   if (result.update) {
-    stdout.write(`\n  ${fg.yellow("↑")} a0 v${result.latest} is available ${dim(`(you have v${result.current})`)}\n`);
-    stdout.write(`  ${dim(`Install: npm install -g ${result.packageName}@latest  (or run \`a0 update\`)`)}\n`);
-  } else stdout.write(`\n  ${fg.green("✓")} up to date ${dim(`v${result.current}`)}\n`);
+    stdout.write(`\n  ↑ a0 v${result.latest} is available (you have v${result.current})\n`);
+    stdout.write(`  Install: npm install -g ${result.packageName}@latest  (or run \`a0 update\`)\n`);
+  } else stdout.write(`\n  ✓ up to date v${result.current}\n`);
   return result;
 }
 
@@ -649,18 +572,18 @@ export async function showUpdateCheck(cfg) {
 export async function doctor(cfg) {
   banner();
   const providers = resolveProviders(cfg);
-  stdout.write(`\n${bold("Lanes")}\n`);
+  stdout.write(`\nLanes\n`);
   for (const p of providers) {
-    const enabled = p.enabled ? fg.green("enabled ") : dim("disabled");
-    let verdict = dim("—");
-    if (p.enabled) { const r = await testProvider(p); verdict = r.ok ? fg.green(`ok ${r.ms}ms`) : fg.red(String(r.status)); }
-    stdout.write(`  ${bold(p.label.padEnd(18))} ${tierLabel(p).padEnd(22)} ${enabled} ${verdict}\n`);
-    if (!p.enabled && p.setup?.url) stdout.write(`      ${dim(`key: ${p.setup.url}`)}\n`);
+    const enabled = p.enabled ? "enabled " : "disabled";
+    let verdict = "—";
+    if (p.enabled) { const r = await testProvider(p); verdict = r.ok ? `ok ${r.ms}ms` : String(r.status); }
+    stdout.write(`  ${p.label.padEnd(18)} ${tierLabel(p).padEnd(22)} ${enabled} ${verdict}\n`);
+    if (!p.enabled && p.setup?.url) stdout.write(`      key: ${p.setup.url}\n`);
   }
   const enabled = providers.filter((p) => p.enabled);
   const keyed = enabled.filter((p) => p.hasKey).length;
   const keyless = enabled.filter((p) => p.keyless && !p.hasKey).length;
-  stdout.write(`\n${bold("Summary")}\n  lanes enabled   ${enabled.length} (${keyed} keyed, ${keyless} anonymous)\n  enhancement     ${cfg.enhance ? fg.green("on") : fg.yellow("off")}\n  race            ${cfg.race}\n  best-of         ${cfg.bestOf}\n  endpoint        ${fg.cyan(`http://${cfg.host}:${cfg.port}/v1`)}\n`);
+  stdout.write(`\nSummary\n  lanes enabled   ${enabled.length} (${keyed} keyed, ${keyless} anonymous)\n  enhancement     ${cfg.enhance ? "on" : "off"}\n  race            ${cfg.race}\n  best-of         ${cfg.bestOf}\n  endpoint        http://${cfg.host}:${cfg.port}/v1\n`);
   await ask("\nPress enter", "");
 }
 
@@ -670,134 +593,128 @@ export async function statusLine(cfg, providers) {
   const keyed = active.filter((p) => p.hasKey).length;
   const anon = active.filter((p) => p.keyless && !p.hasKey).length;
   banner();
-  stdout.write(`\n${bold("Running")}\n  endpoint   ${fg.cyan(`http://${cfg.host}:${cfg.port}/v1`)}\n  api key    ${cfg.token ? mask(cfg.token) : dim("any value (no auth)")}\n  lanes      ${active.length} (${keyed} keyed, ${anon} anonymous)\n  enhance    ${cfg.enhance ? fg.green("on") : fg.yellow("off")}\n  race       ${cfg.race}   best-of ${cfg.bestOf}\n\n${dim("Point any OpenAI-compatible client at the endpoint above.")}\n${dim("Press Ctrl-C to stop.")}\n`);
+  stdout.write(`\nRunning\n  endpoint   http://${cfg.host}:${cfg.port}/v1\n  api key    ${cfg.token ? mask(cfg.token) : "any value (no auth)"}\n  lanes      ${active.length} (${keyed} keyed, ${anon} anonymous)\n  enhance    ${cfg.enhance ? "on" : "off"}\n  race       ${cfg.race}   best-of ${cfg.bestOf}\n\nPoint any OpenAI-compatible client at the endpoint above.\nPress Ctrl-C to stop.\n`);
 }
 
 // ── full-screen TUI ───────────────────────────────────────────────────────
+export async function runTUI(cfg) {
+  globalThis.__a0cfg = cfg;
+  if (!tty) { stdout.write(`a0 v${VERSION} — non-interactive. Use 'a0 config' for settings.\n`); return; }
+
+  // Enter alternate screen
+  stdout.write(ALT_ON + CLEAR);
+  setupRawInput();
+
+  let currentView = "dashboard";
+  let menuIndex = 0;
+  let searchQuery = "";
+  let needsRedraw = true;
+
+  const navItems = ["Dashboard", "Lanes", "Models", "Providers", "Settings", "Doctor", "Update", "Quit"];
+
+  function render() {
+    const { w, h } = termSize();
+    stdout.write(CLEAR);
+
+    // Title bar
+    writeAt(1, 1, ` a0 v${VERSION} `.padEnd(w));
+
+    // Sidebar
+    const sidebarW = 24;
+    drawBox(3, 1, sidebarW, h - 4, "Navigation");
+    for (let i = 0; i < navItems.length; i++) {
+      const prefix = menuIndex === i ? "▸ " : "  ";
+      const style = menuIndex === i ? "\x1b[1;32m" : "";
+      writeAt(4 + i, 2, `${style}${prefix}${navItems[i]}${RESET}`.padEnd(sidebarW - 1));
+    }
+
+    // Content area
+    const contentX = sidebarW + 2;
+    const contentW = w - contentX;
+    drawBox(3, contentX, contentW, h - 4, currentView.charAt(0).toUpperCase() + currentView.slice(1));
+
+    const providers = resolveProviders(cfg);
+    const active = activeProviders(providers);
+
+    if (currentView === "dashboard") {
+      const lines = [
+        `  Endpoint:  http://${cfg.host || "127.0.0.1"}:${cfg.port || 8082}/v1`,
+        `  Lanes:     ${active.length} enabled`,
+        `  Enhance:   ${cfg.enhance ? "on" : "off"}`,
+        `  Race:      ${cfg.race || 2}   Best-of: ${cfg.bestOf || 1}`,
+        `  Models:    ${providers.reduce((n, p) => n + p.models.length, 0)} total across ${providers.length} providers`,
+        ``,
+        `  j/k  navigate menu`,
+        `  Enter/space  select`,
+        `  q  quit (from dashboard)`,
+        `  Esc  back to dashboard`,
+      ];
+      for (let i = 0; i < lines.length && i < h - 8; i++) {
+        writeAt(5 + i, contentX + 2, lines[i]);
+      }
+    } else if (currentView === "lanes") {
+      let r = 5;
+      for (const p of providers) {
+        if (r >= h - 5) break;
+        const state = p.enabled ? "●" : "○";
+        const tier = p.tier === "recommended" ? "rec" : p.tier === "keyless" ? "key" : p.tier === "local" ? "loc" : "opt";
+        const keyInfo = p.hasKey ? `key ${mask(p.key)}` : p.keyless ? "anonymous" : "no key";
+        const mc = modelCounts(p);
+        const modelInfo = (p.keyless && !p.hasKey) ? `${mc.total} curated` : `${mc.enabled}/${mc.total} models`;
+        writeAt(r, contentX + 2, `  ${state} ${p.label.padEnd(18)} ${tier.padEnd(10)} ${keyInfo.padEnd(20)} ${modelInfo}`.slice(0, contentW - 4));
+        r++;
+      }
+    } else {
+      writeAt(5, contentX + 2, "Press Esc to go back");
+    }
+
+    // Status bar
+    drawStatusBar(["↑↓/jk navigate", "Enter/space select", "Esc back", "q quit", "Ctrl+C exit"]);
+  }
+
+  setKeyHandler((ev) => {
+    if (ev.type === "key") {
+      if (ev.key === "escape") { currentView = "dashboard"; render(); }
+      else if (ev.key === "\x1b[A" || ev.char === "k") { menuIndex = Math.max(0, menuIndex - 1); render(); }
+      else if (ev.key === "\x1b[B" || ev.char === "j") { menuIndex = Math.min(MENU_ITEMS.length - 1, menuIndex + 1); render(); }
+      else if (ev.key === "enter" || ev.char === " ") {
+        const item = MENU_ITEMS[menuIndex];
+        if (item.id === "quit") { cleanup(); process.exit(0); }
+        else { currentView = item.id; render(); }
+      } else if (ev.char === "q" && currentView === "dashboard") { cleanup(); process.exit(0); }
+    } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
+      // Sidebar click
+      if (ev.col >= 2 && ev.col <= 24 && ev.row >= 4 && ev.row < 4 + MENU_ITEMS.length) {
+        const idx = ev.row - 4;
+        if (idx >= 0 && idx < MENU_ITEMS.length) {
+          menuIndex = idx;
+          const item = MENU_ITEMS[idx];
+          if (item.id === "quit") { cleanup(); process.exit(0); }
+          else { currentView = item.id; render(); }
+        }
+      }
+    }
+  });
+
+  stdout.on("resize", () => render());
+  render();
+  await new Promise(() => {});
+}
+
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "◉", desc: "Overview and status" },
   { id: "lanes", label: "Lanes", icon: "≡", desc: "Providers and keys" },
   { id: "models", label: "Models", icon: "◆", desc: "Per-model selection" },
-  { id: "providers", label: "Providers", icon: "≡", desc: "Search and select providers" },
+  { id: "providers", label: "Providers", icon: "+", desc: "Search and select providers" },
   { id: "settings", label: "Settings", icon: "⚙", desc: "All configuration" },
   { id: "doctor", label: "Doctor", icon: "♥", desc: "Health check" },
   { id: "update", label: "Update", icon: "↑", desc: "Check for updates" },
   { id: "quit", label: "Quit", icon: "✕", desc: "Exit" },
 ];
 
-let menuIndex = 0;
-let currentView = "menu";
-
-function renderMenu() {
-  const { w, h } = termSize();
-  stdout.write(CLEAR);
-  const title = ` a0 v${VERSION} `;
-  writeAt(1, 1, `${ESC}[1;36m${title.padEnd(w)}${RESET}`);
-  const menuW = 30, menuH = MENU_ITEMS.length + 4, menuR = 3, menuC = 2;
-  drawBox(menuR, menuC, menuW, menuH, "Menu");
-  for (let i = 0; i < MENU_ITEMS.length; i++) {
-    const item = MENU_ITEMS[i];
-    const prefix = i === menuIndex ? "▸ " : "  ";
-    const style = i === menuIndex ? `${ESC}[1;32m` : "";
-    writeAt(menuR + 2 + i, menuC + 1, `${style}${(prefix + item.icon + " " + item.label).padEnd(menuW - 2)}${RESET}`);
-  }
-  const descC = menuC + menuW + 2, descW = w - descC, descH = menuH;
-  drawBox(menuR, descC, descW, descH, "Description");
-  const sel = MENU_ITEMS[menuIndex];
-  writeAt(menuR + 2, descC + 2, `${bold(sel.label)}`);
-  writeAt(menuR + 3, descC + 2, `${dim(sel.desc)}`);
-  const infoR = menuR + menuH + 1, infoH = h - infoR - 1;
-  if (infoH > 4) {
-    drawBox(infoR, 2, w - 2, infoH, "Status");
-    const cfg = globalThis.__a0cfg || {};
-    const providers = resolveProviders(cfg);
-    const active = activeProviders(providers);
-    const keyed = active.filter((p) => p.hasKey).length;
-    const anon = active.filter((p) => p.keyless && !p.hasKey).length;
-    const lines = [
-      `  Endpoint:  ${fg.cyan(`http://${cfg.host || "127.0.0.1"}:${cfg.port || 8082}/v1`)}`,
-      `  Lanes:     ${active.length} enabled (${keyed} keyed, ${anon} anonymous)`,
-      `  Enhance:   ${cfg.enhance ? fg.green("on") : fg.yellow("off")}`,
-      `  Race:      ${cfg.race || 2}   Best-of: ${cfg.bestOf || 1}`,
-      `  Models:    ${providers.reduce((n, p) => n + p.models.length, 0)} total across ${providers.length} providers`,
-    ];
-    for (let i = 0; i < lines.length && i < infoH - 2; i++) writeAt(infoR + 2 + i, 3, lines[i]);
-  }
-  drawStatusBar([`${dim("↑↓")} navigate`, `${dim("Enter")} select`, `${dim("q")} quit`, `${dim("Ctrl+C")} exit`]);
-}
-
-function renderLanes() {
-  const { w, h } = termSize();
-  stdout.write(CLEAR);
-  const cfg = globalThis.__a0cfg || {};
-  const providers = resolveProviders(cfg);
-  writeAt(1, 1, `${ESC}[1;36m  Lanes${" ".repeat(Math.max(0, w - 8))}${RESET}`);
-  const boxH = h - 4;
-  drawBox(3, 1, w, boxH, "Providers");
-  let r = 5;
-  for (const p of providers) {
-    if (r >= 3 + boxH - 1) break;
-    const state = p.enabled ? fg.green("●") : dim("○");
-    const tier = p.tier === "recommended" ? fg.green("rec") : p.tier === "keyless" ? dim("keyless") : p.tier === "local" ? fg.cyan("local") : fg.yellow("opt");
-    const keyInfo = p.hasKey ? dim(`key ${mask(p.key)}`) : p.keyless ? dim("anonymous") : dim("no key");
-    const mc = modelCounts(p);
-    const modelInfo = (p.keyless && !p.hasKey) ? dim(`${mc.total} curated`) : dim(`${mc.enabled}/${mc.total} models`);
-    writeAt(r, 2, `  ${state} ${p.label.padEnd(18)} ${tier.padEnd(10)} ${keyInfo.padEnd(20)} ${modelInfo}`.slice(0, w - 2));
-    r++;
-  }
-  drawStatusBar([`${dim("↑↓")} scroll`, `${dim("Esc")} back`, `${dim("q")} quit`]);
-}
-
-export async function runTUI(cfg) {
-  globalThis.__a0cfg = cfg;
-  if (!tty) { stdout.write(`a0 v${VERSION} — non-interactive. Use 'a0 config' for settings.\n`); return; }
-  stdout.write(ALT_ON + CLEAR);
-  setupRawInput();
-  let needsRedraw = true;
-  setKeyHandler((ev) => {
-    if (ev.type === "key") {
-      if (ev.key === "escape") { if (currentView !== "menu") { currentView = "menu"; needsRedraw = true; } else { cleanup(); process.exit(0); } }
-      else if (ev.key === "\x1b[A") { if (currentView === "menu") { menuIndex = (menuIndex - 1 + MENU_ITEMS.length) % MENU_ITEMS.length; needsRedraw = true; } }
-      else if (ev.key === "\x1b[B") { if (currentView === "menu") { menuIndex = (menuIndex + 1) % MENU_ITEMS.length; needsRedraw = true; } }
-      else if (ev.key === "enter") {
-        if (currentView === "menu") {
-          const item = MENU_ITEMS[menuIndex];
-          if (item.id === "quit") { cleanup(); process.exit(0); }
-          else { currentView = item.id; needsRedraw = true; }
-        }
-      } else if (ev.key === "q" && currentView === "menu") { cleanup(); process.exit(0); }
-    } else if (ev.type === "mouse" && ev.action === "press" && ev.btn === 0) {
-      const menuR = 3, menuC = 2, menuW = 30;
-      if (ev.col >= menuC && ev.col < menuC + menuW && ev.row >= menuR + 2 && ev.row < menuR + 2 + MENU_ITEMS.length) {
-        const idx = ev.row - (menuR + 2);
-        if (idx >= 0 && idx < MENU_ITEMS.length) {
-          menuIndex = idx;
-          const item = MENU_ITEMS[idx];
-          if (item.id === "quit") { cleanup(); process.exit(0); }
-          else { currentView = item.id; needsRedraw = true; }
-        }
-      }
-    }
-  });
-  const renderLoop = setInterval(() => {
-    if (!needsRedraw) return;
-    needsRedraw = false;
-    if (currentView === "menu") renderMenu();
-    else if (currentView === "lanes") renderLanes();
-    else {
-      stdout.write(CLEAR);
-      writeAt(1, 1, `${ESC}[1;36m  ${currentView}${" ".repeat(40)}${RESET}`);
-      writeAt(3, 2, `${dim("Press Esc to go back")}`);
-      drawStatusBar([`${dim("Esc")} back`, `${dim("q")} quit`]);
-    }
-  }, 50);
-  stdout.on("resize", () => { needsRedraw = true; });
-  await new Promise(() => {});
-}
-
 // ── help ──────────────────────────────────────────────────────────────────
 export function help() {
-  stdout.write(`\n${bold("a0")} ${dim(`v${VERSION}`)} — OpenAI-compatible inference gateway\n\n${bold("Usage")}\n  a0                 start the gateway (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway\n  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\n${bold("Flags")}\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install\n`);
+  stdout.write(`\na0 v${VERSION} — OpenAI-compatible inference gateway\n\nUsage\n  a0                 start the gateway (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway\n  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\nFlags\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install\n`);
 }
 
 export default { clear, banner, setupWizard, settingsMenu, doctor, statusLine, modelMenu, addProviderWizard, addModelWizard, promptSecret, help, runTUI, closeInput, selectProviderUI };
