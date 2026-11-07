@@ -83,7 +83,7 @@ function readLine() {
   if (lineQueue.length > 0) return Promise.resolve(lineQueue.shift());
   return new Promise((resolve) => { lineWaiter = resolve; });
 }
-export function closeInput() { if (rl) { rl.close(); rl = null; lineQueue.length = 0; lineWaiter = null; } }
+export function closeInput() { if (rl) { rl.removeAllListeners(); rl.close(); rl = null; lineQueue.length = 0; lineWaiter = null; stdout.write("DEBUG: closeInput done\n"); } }
 async function ask(question, def = "") {
   const suffix = def !== "" ? dim(` [${def}]`) : "";
   stdout.write(`${question}${suffix}: `);
@@ -459,14 +459,32 @@ export async function selectProviderUI(cfg, title = "Select provider") {
   let scrollOffset = 0;
   const wasRaw = stdin.isTTY && stdin.isRaw;
   let dataListener = null;
-  if (stdin.isTTY && !stdin.isRaw) {
-    closeInput();
-    stdin.setRawMode(true);
+  if (stdin.isTTY) {
+    // Close readline if active
+    if (rl) {
+      rl.removeAllListeners();
+      rl.close();
+      rl = null;
+      lineQueue.length = 0;
+      lineWaiter = null;
+    }
+    // Remove ALL listeners
+    stdin.removeAllListeners();
+    // Wait for cleanup
+    await new Promise(r => setTimeout(r, 300));
+    // Enable raw mode
+    if (!stdin.isRaw) stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding("utf8");
-    dataListener = (chunk) => { inputBuffer += chunk; processInput(); };
+    inputBuffer = "";
+    dataListener = (chunk) => {
+      inputBuffer += chunk;
+      processInput();
+    };
     stdin.on("data", dataListener);
+    await new Promise(r => setTimeout(r, 100));
   }
+
   function getFiltered() {
     if (!searchQuery) return providers;
     const q = searchQuery.toLowerCase();
@@ -506,7 +524,7 @@ export async function selectProviderUI(cfg, title = "Select provider") {
       const filtered = getFiltered();
       if (ev.type === "char") {
         if (ev.char === "a" && !searchQuery) {
-          if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+          if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
           resolve({ type: "add_custom" });
           return;
         }
@@ -516,13 +534,13 @@ export async function selectProviderUI(cfg, title = "Select provider") {
         render();
       } else if (ev.type === "key") {
         if (ev.key === "escape") {
-          if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+          if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
           resolve(null);
         } else if (ev.key === "\x1b[A") { selectedIndex = Math.max(0, selectedIndex - 1); render(); }
         else if (ev.key === "\x1b[B") { selectedIndex = Math.min(Math.max(0, filtered.length - 1), selectedIndex + 1); render(); }
         else if (ev.key === "enter") {
           if (filtered.length > 0) {
-            if (stdin.isTTY && !wasRaw) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
+            if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); if (dataListener) stdin.removeListener("data", dataListener); ensureReader(); }
             resolve({ type: "select", provider: filtered[selectedIndex] });
           }
         } else if (ev.key === "backspace") { searchQuery = searchQuery.slice(0, -1); selectedIndex = 0; scrollOffset = 0; render(); }

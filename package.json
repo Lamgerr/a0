@@ -1,6 +1,6 @@
 {
   "name": "a0-gateway",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Self-hosted OpenAI-compatible inference gateway — pool 46+ LLM providers, route by capability, race lanes in parallel, enhance prompts. Zero dependencies, runs as a daemon.",
   "type": "module",
   "bin": {
