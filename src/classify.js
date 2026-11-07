@@ -104,6 +104,7 @@ export function analyze(body) {
   if (useCase === "research" || useCase === "analysis") difficulty = Math.max(difficulty, 2);
 
   const requested = typeof body?.model === "string" ? body.model : "";
+  const isCategory = requested === "a0" || requested.startsWith("a0/");
   let inferred;
   if (vision) inferred = "a0/vision";
   else if (longContext) inferred = "a0/long";
@@ -112,11 +113,11 @@ export function analyze(body) {
   else if (difficulty === 1) inferred = "a0/fast";
   else inferred = "a0/auto";
 
-  const category = requested.startsWith("a0/") && requested !== "a0/auto" ? requested : inferred;
+  const category = isCategory && requested !== "a0" && requested !== "a0/auto" ? requested : inferred;
 
   return {
     category,
-    explicitModel: requested && !requested.startsWith("a0/") ? requested : "",
+    explicitModel: requested && !isCategory ? requested : "",
     vision,
     tools: Boolean(tools),
     longContext,

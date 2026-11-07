@@ -3,6 +3,7 @@
 // model, no image to a text-only one, no 200K prompt to a 32K window.
 
 const CATEGORY_IDS = new Set([
+  "a0",
   "a0/auto",
   "a0/code",
   "a0/reasoning",
@@ -95,6 +96,7 @@ export function route(body, analysis, providers, cfg) {
     throw new RouteError("model_not_found", `unknown category "${analysis.category}"`);
   }
 
+  // a0 and a0/auto are already resolved to the inferred category by analyze()
   const rejected = new Map();
   let eligibleList = all.filter((c) => {
     const why = eligible(c, analysis);

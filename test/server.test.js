@@ -35,6 +35,7 @@ test("/v1/models lists categories and lanes", async () => {
     const res = await fetch(`${base}/v1/models`);
     const json = await res.json();
     const ids = json.data.map((m) => m.id);
+    assert.ok(ids.includes("a0"));
     assert.ok(ids.includes("a0/auto"));
     assert.ok(ids.includes("tiny"));
   } finally {

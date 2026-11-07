@@ -11,7 +11,8 @@
 // leaving the terminal.
 
 export const CATEGORIES = [
-  { id: "a0/auto", label: "a0 auto", note: "best available lane for the request" },
+  { id: "a0", label: "a0", note: "intelligent auto-routing — a0 picks the best lane for every request" },
+  { id: "a0/auto", label: "a0 auto", note: "alias for a0 — best available lane" },
   { id: "a0/code", label: "a0 code", note: "agentic coding, tools required" },
   { id: "a0/reasoning", label: "a0 reasoning", note: "hard problems, higher quality lanes" },
   { id: "a0/vision", label: "a0 vision", note: "image input" },

@@ -84,19 +84,19 @@ A plain proxy tries lane 1, then lane 2. a0 decides before it sends:
 - **Free first.** Keyless is the default until you add a key; after that, your keyed lanes
   are primary and the anonymous pool is optional fallback.
 
-## Categories
+## Models
 
-| id | use |
-|---|---|
-| `a0/auto` | let a0 infer the shape of the request |
-| `a0/code` | agentic coding; requires tool support |
-| `a0/reasoning` | hard problems; prefers the highest-quality lane |
-| `a0/vision` | image input |
-| `a0/fast` | short tasks; prefers low-latency lanes |
-| `a0/long` | large contexts |
-| `a0/cheap` | keyless lanes only |
+a0 exposes a single intelligent endpoint and individual raw models:
 
-A raw model id (for example `gpt-oss-120b`) is also accepted when that lane is enabled.
+- **`a0`** — the primary endpoint. a0 analyzes the request (use case, difficulty, vision, tools,
+  context length) and automatically selects the best lane. Use this for most requests.
+- **`a0/auto`** — alias for `a0`.
+- **`a0/code`**, **`a0/reasoning`**, **`a0/vision`**, **`a0/fast`**, **`a0/long`**, **`a0/cheap`** —
+  force a specific routing strategy.
+- **Raw model IDs** (e.g., `gpt-oss-120b`, `groq::qwen/qwen3.8-27b`) — pin a specific lane.
+
+`GET /v1/models` lists `a0` first, then all categories, then every enabled raw model from
+connected providers.
 
 ## Pick your models
 
