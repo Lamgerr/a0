@@ -611,6 +611,71 @@ export async function runTUI(cfg) {
         writeAt(r, contentX + 2, `  ${state} ${p.label.padEnd(18)} ${tier.padEnd(10)} ${keyInfo.padEnd(20)} ${modelInfo}`.slice(0, contentW - 4));
         r++;
       }
+      if (r < h - 4) writeAt(r + 1, contentX + 2, "Use 'a0 config' for interactive management");
+    } else if (currentView === "models") {
+      let r = 5;
+      writeAt(r, contentX + 2, "  Provider              Models"); r++;
+      writeAt(r, contentX + 2, "  " + "─".repeat(Math.min(contentW - 4, 50))); r++;
+      for (const p of providers) {
+        if (r >= h - 5) break;
+        const mc = modelCounts(p);
+        const state = p.enabled ? "●" : "○";
+        writeAt(r, contentX + 2, `  ${state} ${p.label.padEnd(18)} ${String(mc.enabled).padStart(3)}/${String(mc.total).padEnd(3)}  ${p.keyless && !p.hasKey ? "curated" : "selectable"}`.slice(0, contentW - 4));
+        r++;
+      }
+      if (r < h - 4) writeAt(r + 1, contentX + 2, "Use 'a0 config' → Lanes for model selection");
+    } else if (currentView === "providers") {
+      let r = 5;
+      writeAt(r, contentX + 2, "  Provider Directory"); r++;
+      writeAt(r, contentX + 2, "  " + "─".repeat(Math.min(contentW - 4, 40))); r++;
+      writeAt(r, contentX + 2, `  ${providers.length} providers available`); r++;
+      writeAt(r, contentX + 2, `  ${active.length} currently enabled`); r++;
+      writeAt(r, contentX + 2, `  ${providers.filter(p => p.keyless && !p.hasKey).length} keyless (anonymous)`); r++;
+      writeAt(r, contentX + 2, `  ${providers.filter(p => p.tier === "local").length} local providers`); r += 2;
+      writeAt(r, contentX + 2, "  Use 'a0 config' → Providers for search & select"); r++;
+      writeAt(r, contentX + 2, "  Or 'a0 config' → Add provider for custom lanes"); r++;
+    } else if (currentView === "settings") {
+      let r = 5;
+      const lines = [
+        "  General",
+        `    Enhance: ${cfg.enhance ? "on" : "off"}  Clean: ${cfg.cleanOutput ? "on" : "off"}  Depth: ${cfg.enhanceDepth}`,
+        "",
+        "  Performance",
+        `    Race: ${cfg.race}  Best-of: ${cfg.bestOf}  Attempts: ${cfg.maxAttempts}`,
+        `    Req timeout: ${cfg.requestTimeoutMs}ms  First byte: ${cfg.firstByteTimeoutMs}ms`,
+        "",
+        "  Routing",
+        `    Keyless first: ${cfg.routing.preferKeyless}  Sticky: ${cfg.routing.sticky}  Cost: ${cfg.routing.costOptimize}`,
+        "",
+        "  Server",
+        `    ${cfg.host}:${cfg.port}  Token: ${cfg.token ? "set" : "none"}  CORS: ${cfg.server.cors}`,
+        "",
+        "  Cache",
+        `    Enabled: ${cfg.cache.enabled}  TTL: ${Math.round(cfg.cache.ttlMs/1000)}s  Max: ${cfg.cache.maxSize}`,
+        "",
+        "  Use 'a0 config' for interactive editing",
+      ];
+      for (let i = 0; i < lines.length && r + i < h - 5; i++) {
+        writeAt(r + i, contentX + 2, lines[i].slice(0, contentW - 4));
+      }
+    } else if (currentView === "doctor") {
+      let r = 5;
+      writeAt(r, contentX + 2, "  Health Check"); r++;
+      writeAt(r, contentX + 2, "  " + "─".repeat(Math.min(contentW - 4, 30))); r++;
+      for (const p of providers) {
+        if (r >= h - 5) break;
+        const state = p.enabled ? "●" : "○";
+        writeAt(r, contentX + 2, `  ${state} ${p.label.padEnd(18)} ${p.enabled ? "ok" : "disabled"}`.slice(0, contentW - 4));
+        r++;
+      }
+      if (r < h - 4) writeAt(r + 1, contentX + 2, "Use 'a0 doctor' for full interactive check");
+    } else if (currentView === "update") {
+      let r = 5;
+      writeAt(r, contentX + 2, "  Update"); r++;
+      writeAt(r, contentX + 2, "  " + "─".repeat(Math.min(contentW - 4, 20))); r++;
+      writeAt(r, contentX + 2, `  Current: v${VERSION}`); r++;
+      writeAt(r, contentX + 2, "  Use 'a0 update' or 'a0 update --check'"); r++;
+      writeAt(r, contentX + 2, "  Settings → Updates for auto-check/install"); r++;
     } else {
       writeAt(5, contentX + 2, "Press Esc to go back");
     }
