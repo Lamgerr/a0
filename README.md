@@ -1,220 +1,162 @@
 # a0
 
-**OpenAI-compatible inference gateway.**
+## The problem
 
-a0 is a local, self-hosted inference gateway. It pools provider lanes, routes by capability,
-races lanes in parallel, enhances prompts, and exposes a single OpenAI-compatible endpoint.
+You use a coding agent — Cline, Roo, Continue, Aider, or the OpenAI SDK.
+Every agent needs an LLM behind it, and you hit the same wall every time:
+
+- **It costs money.** A real coding session burns through API credit fast.
+- **You need an account.** Every provider wants a signup, a card, or both.
+- **No single provider is good at everything.** One is fast, one is smart, one takes images, one has a big context window. You end up picking one and living with its limits.
+- **Free tiers break.** Rate limits, dead endpoints, models that vanish overnight. Your session stops in the middle of a task.
+- **You manage it by hand.** You decide which model to use, and when it fails, you switch by hand.
+
+a0 exists to remove all of that.
+
+## What a0 is
+
+a0 is a small server you run on your own machine. It takes requests from your coding agent, decides which LLM provider should answer, sends the request there, and streams the answer back.
 
 ```
-your client ──► http://127.0.0.1:8082/v1 ──► a0 ──► free lanes
+your agent ──► http://127.0.0.1:8082/v1 ──► a0 ──► 46+ providers
 ```
 
-## Quick start
+Your agent does not talk to OpenAI, Groq, or anyone else directly. It talks to a0. a0 talks to everyone else.
 
-```sh
-npx a0-gateway  # guided setup on first run, then serves
-```
+It is not an agent, not a chat app, and not a hosted service. It is the piece between your agent and the models.
 
-Or install it once:
+## Install
 
 ```sh
 npm install -g a0-gateway
-a0              # same thing, shorter
+a0
 ```
 
-Or from source:
+First run opens a setup wizard. It asks which providers you want and walks you through getting free keys. Skip everything and a0 still works with no keys at all.
+
+Then point your agent at:
+
+| setting  | value                          |
+|----------|--------------------------------|
+| Base URL | `http://127.0.0.1:8082/v1`     |
+| API key  | any value, for example `a0-local` |
+
+That is the whole setup. Works on Linux, macOS, and Windows. Needs Node 18 or newer. Zero npm dependencies.
+
+## Features
+
+### One endpoint that picks the model for you
+
+Ask for the model named `a0` and a0 looks at your request and picks a lane:
+
+- Is it a coding request with tool calls? It picks a model that supports tools.
+- Is there an image? It picks a vision model.
+- Is the context huge? It picks a model with a big window.
+- Is it a one-line question? It picks the fastest model it has.
+
+You can also force it: `a0/code`, `a0/reasoning`, `a0/vision`, `a0/fast`, `a0/long`, `a0/cheap`. Or name a specific model to pin it.
+
+### Works with no keys
+
+Two providers (LLM7 and Pollinations) work with no account, no key, no signup. Install and it runs. The limits are lower, but it is a working default.
+
+The setup wizard also suggests free keys from Kilo, xKiro, Groq, and Z.ai — all have real free tiers and no card required. Add one key and a0 switches to keyed mode and uses your keys.
+
+### 46 providers built in
+
+Free and anonymous: LLM7, Pollinations, Kilo, xKiro, Groq, Z.ai, OpenRouter, and more.
+
+Paid if you want them: OpenAI, Anthropic, Mistral, DeepSeek, Together, Fireworks, xAI, Cohere, and 20 others.
+
+Local: Ollama, LM Studio, vLLM, llama.cpp. If you run a model on your own machine, a0 can use it too.
+
+You can add any OpenAI-compatible endpoint that is not in the list.
+
+### It sends to several providers at once
+
+With `race=2` (the default), a0 sends your request to two providers at the same time and uses whichever answers first. The loser is cancelled. If one provider is slow or down, you do not wait for it.
+
+### It recovers from failure
+
+- If a provider fails five times in a row, a0 stops sending to it for a minute (circuit breaker).
+- It tracks which providers are healthy and which are slow, and prefers the healthy ones.
+- If the first provider fails before answering, a0 tries the next one.
+- Rate limits are tracked per provider so a0 does not hammer a lane that is already full.
+
+### It makes the model behave better for coding
+
+Every request gets a short set of instructions added: answer directly, no preamble, do not invent APIs, ask at most one question. This cuts down the filler that free models love to output and saves tokens. It is on by default and can be turned off.
+
+### It watches for new models
+
+Free providers add and remove models all the time. Every 12 hours, a0 checks each provider's model list in the background and adds new ones. It never removes models that ship with a0 — only ones it discovered itself.
+
+### It runs in the background
 
 ```sh
-git clone <repo> && cd a0
-node bin/a0.js
-npm test
+a0 start    # start the daemon
+a0 stop     # stop it
+a0 status   # check if it's running
 ```
 
-Then point your client at:
+No terminal window needed. Logs go to `~/.a0/a0.log`.
 
-| setting | value |
-|---|---|
-| Base URL | `http://127.0.0.1:8082/v1` |
-| API key | any value (`a0-local` works) |
+### Terminal UI
 
-`GET /v1/models` lists a0's categories plus every enabled raw model.
+Run `a0` with no arguments for a full-screen terminal UI. From there you can:
 
-## Setup: keys first, keyless as the fallback
+- See which providers are active and how they are doing
+- Add providers and keys
+- Turn individual models on or off
+- Change settings
+- Run diagnostics
 
-a0 works with no account at all. But anonymous quota is shared per IP and has tighter
-limits, so setup recommends adding **legit free-tier keys** first. If you add at least one
-key, a0 runs in **keyed mode** and turns the anonymous lanes off. If you skip every key, it
-runs in **keyless mode** with the anonymous pool. Both modes are one setting away in
-`a0 config`.
+### Security
 
-The wizard walks you through each provider, with the key URL and the actual free limits:
+- Listens on `127.0.0.1` by default. Nothing outside your machine can reach it.
+- If you bind it to a network address, a0 generates an auth token automatically.
+- Keys are stored in `~/.a0/config.json` with restricted permissions. They are never logged and never sent anywhere except the provider they belong to.
+- No telemetry. No accounts. Nothing phones home except the model requests you make.
 
-### Recommended
+## How it works
 
-| provider | why | get a key |
-|---|---|---|
-| **Kilo Gateway** | `:free` models, 200 req/hr anonymous, a key raises limits | [app.kilo.ai](https://app.kilo.ai) |
-| **xKiro** | 45 free models, 500K tokens/day (1M after Telegram) | [xkiro.com/register](https://xkiro.com/register) |
-| **Groq** | free tier, the fastest lane — best upgrade for agentic sessions | [console.groq.com/keys](https://console.groq.com/keys) |
-| **Z.ai** | GLM-5.3-Flash: 1M context, vision + tools, strong coding | [z.ai API keys](https://z.ai/manage-apikey/apikey-list) |
+Every request goes through five steps:
 
-### Optional — free tiers exist, but are tighter or less predictable
+1. **Analyze.** a0 reads the request: is it code? does it need tools? is there an image? how long is the context? This is cheap text matching — no model call, no delay.
 
-| provider | caveat | get a key |
-|---|---|---|
-| OpenRouter | ~50 free requests/day without credit | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| MiMo | limited quota; verify the model id | [platform.xiaomimimo.com](https://platform.xiaomimimo.com) |
-| Alibaba DashScope | region-limited, expiring free quota | [Bailian console](https://bailian.console.alibabacloud.com/) |
-| OpenAI | no free tier | [platform.openai.com](https://platform.openai.com/api-keys) |
-| Gemini | free project quotas are opaque and change | [AI Studio](https://aistudio.google.com/apikey) |
+2. **Route.** a0 picks which models can serve the request. A tool call never goes to a model without tool support. An image never goes to a text-only model. A 200,000-token prompt never goes to a 32K model. Then it ranks the eligible models by quality, speed, and health.
 
-## What makes it different
+3. **Enhance.** a0 adds its instructions to the system message: be direct, no filler, ground your claims.
 
-A plain proxy tries lane 1, then lane 2. a0 decides before it sends:
+4. **Send.** a0 sends the request to the top provider — or to two at once if racing is on. If the first one fails before answering, it tries the next.
 
-- **Prompt enhancement.** Every request gets a short operating contract merged into its
-  system message: answer, don't preamble; ground every claim; ask at most one question.
-  It is idempotent and can be disabled (`a0 config` → Behaviour).
-- **Capability routing.** Tool calls never go to a chat-only lane. Images never go to a
-  text-only one. A 200K prompt never goes to a 32K window.
-- **Race.** With `race=2`, two lanes are dispatched in parallel and a0 commits to the first
-  usable first byte, then aborts the loser. A slow free lane can't stall a session.
-- **Best-of.** For non-stream calls, a0 can collect several answers and keep the best by a
-  small deterministic rubric (valid tool call, real code, no refusal, not truncated).
-- **Free first.** Keyless is the default until you add a key; after that, your keyed lanes
-  are primary and the anonymous pool is optional fallback.
+5. **Stream.** The answer streams back to your agent as soon as the first byte arrives.
 
-## Models
-
-a0 exposes a single intelligent endpoint and individual raw models:
-
-- **`a0`** — the primary endpoint. a0 analyzes the request (use case, difficulty, vision, tools,
-  context length) and automatically selects the best lane. Use this for most requests.
-- **`a0/auto`** — alias for `a0`.
-- **`a0/code`**, **`a0/reasoning`**, **`a0/vision`**, **`a0/fast`**, **`a0/long`**, **`a0/cheap`** —
-  force a specific routing strategy.
-- **Raw model IDs** (e.g., `gpt-oss-120b`, `groq::qwen/qwen3.8-27b`) — pin a specific lane.
-
-`GET /v1/models` lists `a0` first, then all categories, then every enabled raw model from
-connected providers.
-
-## Pick your models
-
-Every keyed lane exposes its model list in `a0 config` → **Lanes, keys, and models** →
-`models <n>`. Toggle individual models, or use `all` / `none`; the choice is stored per lane
-as a `disabled` list and survives restarts. Disabled models disappear from `GET /v1/models`
-and are never routed to, even when a client names them explicitly.
-
-Anonymous-pool models (LLM7, Pollinations, and Kilo without a key) are curated by a0 and are
-not individually selectable. Add a key for a provider that offers one to take control of its
-catalog.
-
-## Stay current
-
-Free lanes change fast, so a0 can keep itself current:
+## Commands
 
 ```sh
-a0 update          # check npm, then install the latest release
-a0 update --check  # report only
+a0               # terminal UI
+a0 start         # start the background server
+a0 stop          # stop it
+a0 restart       # restart it
+a0 status        # is it running?
+a0 setup         # guided setup wizard
+a0 config        # change settings
+a0 doctor        # check which providers are reachable
+a0 models        # list models and categories
+a0 update        # check for a newer version and install it
+a0 passwd        # set or change the auth key
 ```
 
-On startup a0 checks npm at most once a day, without delaying the server. It only prints a
-notice by default; set `updates.autoInstall` in `a0 config` → **Updates** to install
-automatically. Either way, restart the process to run the new version.
+## Limits
 
-## TUI
-
-```sh
-a0 setup     # guided key + lane setup
-a0 config    # change every setting interactively
-a0 doctor    # check which lanes are reachable
-a0 models    # list categories and lanes
-a0 update    # check for and install a newer release
-```
-
-Everything is stored in `~/.a0/config.json` with `0600` permissions. Keys are never logged
-and never leave the machine.
-
-## Add your own provider
-
-Any OpenAI-compatible endpoint works. Add it interactively via `a0 config` → **Add provider**,
-or by hand in `~/.a0/config.json`:
-
-```json
-{
-  "providers": {
-    "my-lane": {
-      "baseUrl": "https://api.example.com/v1",
-      "key": "sk-...",
-      "tier": "optional",
-      "keyless": false,
-      "label": "My Lane",
-      "models": [
-        {
-          "id": "my-model",
-          "context": 128000,
-          "tools": true,
-          "vision": false,
-          "quality": 4,
-          "fast": true
-        }
-      ]
-    }
-  }
-}
-```
-
-You can also add individual models to an existing lane via `a0 config` → **Add model**,
-or by appending to the `models` array in the config.
-
-### Built-in providers
-
-a0 ships with 46 providers out of the box, including:
-
-- **Recommended free keys**: Kilo Gateway, xKiro, Groq, Z.ai
-- **Optional**: OpenRouter, MiMo, Alibaba DashScope, OpenAI, Gemini, Anthropic, Mistral,
-  Cohere, DeepSeek, Together, Fireworks, Perplexity, Cerebras, SambaNova, Novita,
-  SiliconFlow, Moonshot, MiniMax, StepFun, NVIDIA NIM, Hyperbolic, DeepInfra, Nebius,
-  AI21, Hugging Face, Replicate, Cloudflare, Lepton, Anyscale, xAI, 01.AI, Baichuan,
-  InternLM
-- **Keyless**: LLM7, Pollinations
-- **Local**: Ollama, LM Studio, vLLM, llama.cpp server
-
-## Security
-
-- Binds `127.0.0.1` by default. Binding a public interface requires a token; a0 generates
-  one on first launch and prints it.
-- No telemetry, no accounts, no remote control plane.
-- Provider terms are your responsibility. a0 only ships lanes with official free or
-  anonymous endpoints, and it never proxies a reverse-engineered chatbot.
-
-## Environment
-
-| variable | meaning |
-|---|---|
-| `A0_PORT`, `A0_HOST` | listen address |
-| `A0_TOKEN` | require this bearer token |
-| `A0_ENHANCE` | `off` disables prompt enhancement |
-| `A0_RACE` | lanes raced in parallel (1–4) |
-| `A0_BEST_OF` | non-stream answers to compare (1–4) |
-| `A0_PACKAGE` | npm package used by the updater (default `a0-gateway`) |
-| `A0_KILO_KEY` | Kilo Gateway key |
-| `A0_XKIRO_KEY` | xKiro key |
-| `A0_GROQ_KEY` | Groq key |
-| `A0_ZAI_KEY` | Z.ai key |
-| `A0_OPENROUTER_KEY` | OpenRouter key |
-| `A0_MIMO_KEY` | MiMo key |
-| `A0_ALIBABA_KEY` | Alibaba DashScope key |
-| `A0_OPENAI_KEY` | OpenAI key |
-| `A0_GEMINI_KEY` | Google Gemini key |
-| `A0_LLM7_KEY` | optional LLM7 token (raises the anonymous limit) |
-
-## Status
-
-v0.1: gateway, enhancement, routing, race, best-of, guided TUI setup, per-model selection,
-self-update, tests. The old Go gateway and React dashboard in this repository are legacy and
-will be removed once parity is confirmed.
+- a0 cannot make a weak model strong. Free models are free models. What a0 does is stop wasting them on the wrong tasks and stop your session from dying when one fails.
+- Anonymous (keyless) providers share their quota across all users. A free key is always better.
+- Streaming is the main path. Retries only happen before the first token is sent — once bytes are flowing, a0 commits.
+- Free providers change their models and limits without warning. The 12-hour model check helps, but a provider can still disappear overnight.
 
 ## License
 
-MIT.
+MIT. Free to use, free to modify.
+
+</content>
