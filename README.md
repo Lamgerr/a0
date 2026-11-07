@@ -2,6 +2,11 @@
 
 **a0 is your personal local inference pooling system.**
 
+```sh
+npm install -g a0-gateway
+a0
+```
+
 ## The problem
 
 You use a coding agent — Cline, Claude Code, OpenCode, Codex, or Any OpenAI Compatible SDK.
@@ -114,8 +119,6 @@ Every request goes through five steps:
 3. **Enhance.** a0 adds its instructions to the system message: be direct, no filler, ground your claims.
 4. **Send.** a0 sends the request to the top provider — or to two at once if racing is on. If the first one fails before answering, it tries the next.
 5. **Stream.** The answer streams back to your agent as soon as the first byte arrives.
-
-## Commands
 
 ## Limits
 
