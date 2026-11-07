@@ -86,14 +86,24 @@ async function fetchProviderModels(provider) {
       if (lower.includes("embedding") || lower.includes("whisper") || lower.includes("tts") ||
           lower.includes("dall-e") || lower.includes("moderation") || lower.includes("audio") ||
           lower.includes("image-generation") || lower.includes("fine-tune")) continue;
+      // Skip image-only models
+      if (lower.includes("image") && !lower.includes("vision") && !lower.includes("chat")) continue;
       // Skip models with very long IDs (likely internal)
       if (String(id).length > 80) continue;
-      // For keyless providers, check if model requires auth
+      // For keyless providers, be very restrictive about what to add
       if (!provider.key && provider.keyless) {
+        // Kilo: only :free models
+        if (provider.id === "kilo") {
+          if (!lower.includes(":free")) continue;
+        }
+        // LLM7 and Pollinations: skip discovery (curated model only)
+        if (provider.id === "llm7" || provider.id === "pollinations") continue;
+        // Local providers: skip discovery (user manages models)
+        if (provider.id === "ollama" || provider.id === "lmstudio" || provider.id === "vllm" || provider.id === "llamacpp") continue;
+        // For other keyless providers, check pricing
         const pricing = m.pricing;
         const isPaid = pricing && (pricing.input > 0 || pricing.output > 0);
-        if (isPaid && !lower.includes(":free") && !lower.includes("free")) {
-          // Quick test: try a minimal request
+        if (isPaid) {
           const works = await testModelAnonymous(provider, id);
           if (!works) continue;
         }
