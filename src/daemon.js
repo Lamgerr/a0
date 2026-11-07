@@ -1,11 +1,14 @@
 // Daemon management. Runs a0 as a background process with a PID file.
+// Cross-platform: works on Linux, macOS, and Windows.
 import fs from "node:fs";
 import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 
 import { configDir, saveConfig } from "./config.js";
+
+const IS_WIN = process.platform === "win32";
 
 export function pidFile() {
   return path.join(configDir(), "a0.pid");
@@ -20,17 +23,29 @@ export function isRunning() {
   try {
     const pid = Number.parseInt(fs.readFileSync(pf, "utf8").trim(), 10);
     if (!pid || !Number.isFinite(pid)) return { running: false, pid: null };
-    // Check if process exists
     try {
       process.kill(pid, 0);
       return { running: true, pid };
     } catch {
-      // Process doesn't exist, clean up stale pid file
       try { fs.unlinkSync(pf); } catch {}
       return { running: false, pid: null };
     }
   } catch {
     return { running: false, pid: null };
+  }
+}
+
+function killPid(pid) {
+  if (IS_WIN) {
+    try {
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore", timeout: 5000 });
+      return true;
+    } catch {
+      try { process.kill(pid); return true; } catch { return false; }
+    }
+  } else {
+    try { process.kill(pid, "SIGTERM"); return true; }
+    catch { return false; }
   }
 }
 
@@ -40,10 +55,8 @@ export function startDaemon(cfg, flags = {}) {
     return { ok: false, message: `a0 is already running (pid ${pid}). Use 'a0 restart' to restart.` };
   }
 
-  // Ensure config dir exists
   fs.mkdirSync(configDir(), { recursive: true, mode: 0o700 });
 
-  // Auto-generate token if binding beyond loopback and no token set
   const host = flags.host || cfg.host || "127.0.0.1";
   const isLocal = host === "127.0.0.1" || host === "localhost" || host === "::1";
   if (!isLocal && !cfg.token && !flags.token) {
@@ -61,21 +74,22 @@ export function startDaemon(cfg, flags = {}) {
   if (flags.token) args.push("--token", flags.token);
   if (flags["no-enhance"]) args.push("--no-enhance");
 
-  const out = fs.openSync(logFile(), "a");
-  const err = fs.openSync(logFile(), "a");
+  const lf = logFile();
+  const out = fs.openSync(lf, "a");
+  const err = fs.openSync(lf, "a");
 
-  const child = spawn(process.execPath, [process.argv[1], ...args], {
+  const spawnOpts = {
     detached: true,
     stdio: ["ignore", out, err],
     cwd: process.cwd(),
-  });
+    windowsHide: true,
+  };
 
+  const child = spawn(process.execPath, [process.argv[1], ...args], spawnOpts);
   child.unref();
 
-  // Write PID file
   fs.writeFileSync(pidFile(), String(child.pid), { mode: 0o600 });
 
-  // Build connection details
   const lines = [];
   lines.push(`a0 started (pid ${child.pid})`);
   lines.push(``);
@@ -90,10 +104,10 @@ export function startDaemon(cfg, flags = {}) {
     lines.push(`  Auth:      no (any value accepted)`);
   }
   lines.push(``);
-  lines.push(`  Logs: ${logFile()}`);
+  lines.push(`  Logs: ${lf}`);
   if (!token && !isLocal) {
     lines.push(``);
-    lines.push(`  ⚠ Binding to a non-loopback address without auth.`);
+    lines.push(`  Warning: Binding to a non-loopback address without auth.`);
     lines.push(`  Run 'a0 passwd' to set a local API key.`);
   }
   if (!token && isLocal) {
@@ -110,46 +124,49 @@ export function stopDaemon() {
     return { ok: false, message: "a0 is not running." };
   }
 
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch (err) {
+  const killed = killPid(pid);
+  if (!killed) {
     try { fs.unlinkSync(pidFile()); } catch {}
-    return { ok: false, message: `Failed to stop: ${err.message}` };
+    return { ok: false, message: `Failed to stop pid ${pid}.` };
   }
 
-  // Wait for process to exit (up to 5 seconds)
   const start = Date.now();
   while (Date.now() - start < 5000) {
     try {
       process.kill(pid, 0);
     } catch {
-      // Process exited
       try { fs.unlinkSync(pidFile()); } catch {}
       return { ok: true, message: `a0 stopped (pid ${pid}).` };
     }
-    // Busy wait (small sleep)
     const end = Date.now() + 100;
     while (Date.now() < end) {}
   }
 
-  // Force kill if still running
-  try { process.kill(pid, "SIGKILL"); } catch {}
+  if (IS_WIN) {
+    try { execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore", timeout: 5000 }); } catch {}
+  } else {
+    try { process.kill(pid, "SIGKILL"); } catch {}
+  }
   try { fs.unlinkSync(pidFile()); } catch {}
   return { ok: true, message: `a0 stopped (pid ${pid}, forced).` };
 }
 
 export function restartDaemon(cfg, flags = {}) {
   const stopResult = stopDaemon();
-  // Brief pause to let port release
   const start = Date.now();
   while (Date.now() - start < 500) {}
   const startResult = startDaemon(cfg, flags);
   return { stop: stopResult, start: startResult };
 }
 
+export function daemonStatus() {
+  const { running, pid } = isRunning();
+  if (!running) return { running: false, pid: null, message: "a0 is not running." };
+  return { running: true, pid, message: `a0 is running (pid ${pid}).` };
+}
+
 export function setPassword(cfg, newPassword, authFile) {
   if (authFile) {
-    // Save token to file
     const dir = path.dirname(authFile);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const token = newPassword || crypto.randomBytes(24).toString("base64url");
@@ -169,9 +186,4 @@ export function setPassword(cfg, newPassword, authFile) {
   saveConfig(cfg);
   const masked = newPassword.length <= 8 ? "••••" : `${newPassword.slice(0, 4)}…${newPassword.slice(-4)}`;
   return { ok: true, token: newPassword, masked, message: `Auth API key set: ${masked}` };
-}
-export function daemonStatus() {
-  const { running, pid } = isRunning();
-  if (!running) return { running: false, pid: null, message: "a0 is not running." };
-  return { running: true, pid, message: `a0 is running (pid ${pid}).` };
 }
