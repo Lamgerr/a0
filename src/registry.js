@@ -875,6 +875,18 @@ export function byTier(providers, tier) {
   return providers.filter((p) => p.tier === tier);
 }
 
+/** Generate a user-friendly slug for a model: provider-modelname-free/paid */
+export function modelSlug(p, m) {
+  const sanitized = String(m.id)
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+  const isFree = p.freeTier || p.keyless || m.keyless;
+  const suffix = isFree ? "free" : "paid";
+  return `${p.id}-${sanitized}-${suffix}`;
+}
+
 export function findModel(providers, requested) {
   if (!requested) return null;
   const [maybeProvider, ...rest] = requested.split("::");
@@ -884,6 +896,8 @@ export function findModel(providers, requested) {
     for (const m of p.models) {
       if (m.enabled === false) continue;
       if (m.id === wanted) return { provider: p, model: m };
+      // Also match by slug
+      if (modelSlug(p, m) === wanted) return { provider: p, model: m };
     }
   }
   return null;
@@ -902,13 +916,15 @@ export function catalog(providers) {
   for (const p of activeProviders(providers)) {
     for (const m of p.models) {
       if (m.enabled === false) continue;
+      const slug = modelSlug(p, m);
       data.push({
-        id: m.id,
+        id: slug,
         object: "model",
         created,
         owned_by: p.id,
         a0: {
           provider: p.id,
+          modelId: m.id,
           label: m.label,
           tier: p.tier,
           context: m.context,
@@ -916,6 +932,7 @@ export function catalog(providers) {
           vision: Boolean(m.vision),
           quality: m.quality,
           keyless: m.keyless,
+          free: p.freeTier || p.keyless || m.keyless,
         },
       });
     }

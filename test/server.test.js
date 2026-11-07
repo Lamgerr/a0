@@ -37,7 +37,7 @@ test("/v1/models lists categories and lanes", async () => {
     const ids = json.data.map((m) => m.id);
     assert.ok(ids.includes("a0"));
     assert.ok(ids.includes("a0/auto"));
-    assert.ok(ids.includes("tiny"));
+    assert.ok(ids.includes("fake-tiny-free"));
   } finally {
     await close(a0);
     await up.close();

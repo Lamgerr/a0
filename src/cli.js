@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { stdin, stdout } from "node:process";
 
 import { configExists, configPath, loadConfig, saveConfig, VERSION } from "./config.js";
-import { CATEGORIES, activeProviders, resolveProviders } from "./registry.js";
+import { CATEGORIES, activeProviders, resolveProviders, modelSlug } from "./registry.js";
 import { createServer } from "./server.js";
 import { help, setupWizard, settingsMenu, doctor, statusLine, banner, runTUI } from "./tui.js";
 import { startDaemon, stopDaemon, restartDaemon, daemonStatus, isRunning, logFile, setPassword } from "./daemon.js";
@@ -73,7 +73,8 @@ function listModels(cfg) {
       const off = m.enabled === false;
       const caps = [m.tools ? "tools" : "", m.vision ? "vision" : "", m.fast ? "fast" : ""].filter(Boolean).join(",");
       const meta = `${String(Math.round((m.context || 0) / 1000))}k${caps ? ` · ${caps}` : ""}`;
-      stdout.write(`      ${off ? "\x1b[2m○" : "●"} ${(off ? `(off) ${m.id}` : m.id).padEnd(32)} ${meta}\x1b[0m\n`);
+      const slug = modelSlug(p, m);
+      stdout.write(`      ${off ? "\x1b[2m○" : "●"} ${(off ? `(off) ${slug}` : slug).padEnd(40)} ${meta}\x1b[0m\n`);
     }
   }
   stdout.write(`\n${"\x1b[2m"}Config: ${configPath()}\x1b[0m\n`);

@@ -81,7 +81,7 @@ test("the catalog exposes only enabled models, with the rest of the lane intact"
   const cfg = cfgWith({ groq: { key: "gsk_test", disabled: ["gpt-oss-120b"] } });
   const list = catalog(resolveProviders(cfg)).data;
   assert.equal(list.some((m) => m.id === "gpt-oss-120b"), false);
-  assert.ok(list.some((m) => m.id === "qwen/qwen3.8-27b"));
+  assert.ok(list.some((m) => m.id === "groq-qwen-qwen3.8-27b-free"));
 });
 
 test("findModel skips disabled models, including the provider::model form", () => {

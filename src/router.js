@@ -1,4 +1,5 @@
 import { isCircuitOpen, checkRateLimit, getHealth, resetAllCircuits } from "./resilience.js";
+import { modelSlug } from "./registry.js";
 
 // The router: eligibility first, score second, diversity third.
 // model, no image to a text-only one, no 200K prompt to a 32K window.
@@ -83,9 +84,12 @@ export function route(body, analysis, providers, cfg) {
   const all = pool(active);
 
   if (analysis.explicitModel) {
-    const hit = all.find(
-      (c) => c.model.id === analysis.explicitModel || `${c.provider.id}::${c.model.id}` === analysis.explicitModel,
-    );
+    const hit = all.find((c) => {
+      if (c.model.id === analysis.explicitModel) return true;
+      if (`${c.provider.id}::${c.model.id}` === analysis.explicitModel) return true;
+      if (modelSlug(c.provider, c.model) === analysis.explicitModel) return true;
+      return false;
+    });
     if (!hit) {
       throw new RouteError(
         "model_not_found",
