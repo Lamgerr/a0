@@ -37,6 +37,7 @@ export function enhanceBody(body, analysis, cfg) {
   if (!cfg?.enhance) return body;
   const out = { ...body };
   if (!Array.isArray(out.messages)) out.messages = [...(body?.messages || [])];
+  else out.messages = out.messages.map(m => ({ ...m })); // deep copy messages to avoid mutation
 
   const text = directive(analysis);
   const msgs = out.messages;
