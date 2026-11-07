@@ -1,10 +1,11 @@
 // Daemon management. Runs a0 as a background process with a PID file.
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-import { configDir } from "./config.js";
+import { configDir, saveConfig } from "./config.js";
 
 export function pidFile() {
   return path.join(configDir(), "a0.pid");
@@ -42,6 +43,17 @@ export function startDaemon(cfg, flags = {}) {
   // Ensure config dir exists
   fs.mkdirSync(configDir(), { recursive: true, mode: 0o700 });
 
+  // Auto-generate token if binding beyond loopback and no token set
+  const host = flags.host || cfg.host || "127.0.0.1";
+  const isLocal = host === "127.0.0.1" || host === "localhost" || host === "::1";
+  if (!isLocal && !cfg.token && !flags.token) {
+    cfg.token = crypto.randomBytes(24).toString("base64url");
+    saveConfig(cfg);
+  }
+
+  const port = flags.port || cfg.port || 8082;
+  const token = flags.token || cfg.token || "";
+
   const args = ["serve"];
   if (flags.port) args.push("--port", String(flags.port));
   if (flags.host) args.push("--host", flags.host);
@@ -63,7 +75,33 @@ export function startDaemon(cfg, flags = {}) {
   // Write PID file
   fs.writeFileSync(pidFile(), String(child.pid), { mode: 0o600 });
 
-  return { ok: true, pid: child.pid, message: `a0 started (pid ${child.pid}). Logs: ${logFile()}` };
+  // Build connection details
+  const lines = [];
+  lines.push(`a0 started (pid ${child.pid})`);
+  lines.push(``);
+  lines.push(`  IP:        ${host}`);
+  lines.push(`  Port:      ${port}`);
+  lines.push(`  Local:     ${isLocal ? "yes (loopback only)" : "no (network accessible)"}`);
+  lines.push(`  Endpoint:  http://${host}:${port}/v1`);
+  if (token) {
+    const masked = token.length <= 8 ? "••••" : `${token.slice(0, 4)}…${token.slice(-4)}`;
+    lines.push(`  Auth:      yes (API key: ${masked})`);
+  } else {
+    lines.push(`  Auth:      no (any value accepted)`);
+  }
+  lines.push(``);
+  lines.push(`  Logs: ${logFile()}`);
+  if (!token && !isLocal) {
+    lines.push(``);
+    lines.push(`  ⚠ Binding to a non-loopback address without auth.`);
+    lines.push(`  Run 'a0 passwd' to set a local API key.`);
+  }
+  if (!token && isLocal) {
+    lines.push(``);
+    lines.push(`  Tip: Run 'a0 passwd' to set a local API key for extra security.`);
+  }
+
+  return { ok: true, pid: child.pid, message: lines.join("\n") };
 }
 
 export function stopDaemon() {
@@ -109,6 +147,29 @@ export function restartDaemon(cfg, flags = {}) {
   return { stop: stopResult, start: startResult };
 }
 
+export function setPassword(cfg, newPassword, authFile) {
+  if (authFile) {
+    // Save token to file
+    const dir = path.dirname(authFile);
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const token = newPassword || crypto.randomBytes(24).toString("base64url");
+    fs.writeFileSync(authFile, token + "\n", { mode: 0o600 });
+    try { fs.chmodSync(authFile, 0o600); } catch {}
+    cfg.authFile = authFile;
+    cfg.token = token;
+    saveConfig(cfg);
+    const masked = token.length <= 8 ? "••••" : `${token.slice(0, 4)}…${token.slice(-4)}`;
+    return { ok: true, token, masked, message: `Auth key saved to ${authFile} (API key: ${masked})` };
+  }
+  if (!newPassword) {
+    newPassword = crypto.randomBytes(24).toString("base64url");
+  }
+  cfg.token = newPassword;
+  cfg.authFile = "";
+  saveConfig(cfg);
+  const masked = newPassword.length <= 8 ? "••••" : `${newPassword.slice(0, 4)}…${newPassword.slice(-4)}`;
+  return { ok: true, token: newPassword, masked, message: `Auth API key set: ${masked}` };
+}
 export function daemonStatus() {
   const { running, pid } = isRunning();
   if (!running) return { running: false, pid: null, message: "a0 is not running." };

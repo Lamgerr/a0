@@ -6,11 +6,11 @@ import { configExists, configPath, loadConfig, saveConfig, VERSION } from "./con
 import { CATEGORIES, activeProviders, resolveProviders } from "./registry.js";
 import { createServer } from "./server.js";
 import { help, setupWizard, settingsMenu, doctor, statusLine, banner, runTUI } from "./tui.js";
-import { startDaemon, stopDaemon, restartDaemon, daemonStatus, isRunning, logFile } from "./daemon.js";
+import { startDaemon, stopDaemon, restartDaemon, daemonStatus, isRunning, logFile, setPassword } from "./daemon.js";
 import { checkLatest, installLatest, maybeCheck } from "./update.js";
 import { startHarness } from "./harness.js";
 
-const VALUE_FLAGS = new Set(["--port", "--host", "--race", "--token", "--best-of"]);
+const VALUE_FLAGS = new Set(["--port", "--host", "--race", "--token", "--best-of", "--file", "--auth-file"]);
 
 function parseArgv(argv) {
   const out = { command: "", flags: {} };
@@ -238,6 +238,22 @@ async function main() {
       return;
     case "start":
       cfg = applyFlags(cfg, flags);
+      // Auto-prompt for auth if not set and running interactively
+      if (stdin.isTTY && !cfg.token && !flags.token) {
+        const { promptSecret } = await import("./tui.js");
+        stdout.write(`\na0 is starting without authentication.\n`);
+        const readline = await import("node:readline/promises");
+        const rl = readline.createInterface({ input: stdin, output: stdout });
+        const wantAuth = (await rl.question("Set a local API key for security? (y/n) [n]: ")).trim().toLowerCase();
+        rl.close();
+        if (wantAuth === "y" || wantAuth === "yes") {
+          const input = (await promptSecret("Enter API key (empty = generate random): ")).trim();
+          const result = setPassword(cfg, input);
+          stdout.write(`✓ ${result.message}\n`);
+          stdout.write(`  Full key: ${result.token}\n`);
+          stdout.write(`  Save this key — you'll need it to access a0.\n\n`);
+        }
+      }
       const startResult = startDaemon(cfg, flags);
       stdout.write(`${startResult.ok ? "✓" : "✗"} ${startResult.message}\n`);
       if (!startResult.ok) process.exitCode = 1;
@@ -260,6 +276,46 @@ async function main() {
       if (st.running) {
         const { running, pid } = isRunning();
         stdout.write(`  pid: ${pid}\n  log: ${logFile()}\n`);
+      }
+      return;
+    case "passwd":
+      cfg = applyFlags(cfg, flags);
+      const authFile = flags.file || flags["auth-file"] || null;
+      if (authFile) {
+        const readline = await import("node:readline/promises");
+        let input = "";
+        if (stdin.isTTY) {
+          const rl = readline.createInterface({ input: stdin, output: stdout });
+          input = (await rl.question("Enter API key (empty = generate random): ")).trim();
+          rl.close();
+        }
+        const result = setPassword(cfg, input, authFile);
+        stdout.write(`✓ ${result.message}\n`);
+        stdout.write(`  Full key: ${result.token}\n`);
+        stdout.write(`  Key file: ${authFile}\n`);
+        const { running: isRun2 } = isRunning();
+        if (isRun2) {
+          stdout.write(`\n  Restarting daemon to apply...\n`);
+          const r = restartDaemon(cfg, flags);
+          stdout.write(`  ${r.start.ok ? "✓" : "✗"} ${r.start.message}\n`);
+        }
+      } else if (stdin.isTTY) {
+        const { promptSecret } = await import("./tui.js");
+        const input = (await promptSecret("Enter API key (empty = generate random): ")).trim();
+        const result = setPassword(cfg, input);
+        stdout.write(`✓ ${result.message}\n`);
+        stdout.write(`  Full key: ${result.token}\n`);
+        stdout.write(`  Save this key — you'll need it to access a0.\n`);
+        const { running: isRun3 } = isRunning();
+        if (isRun3) {
+          stdout.write(`\n  Restarting daemon to apply...\n`);
+          const r = restartDaemon(cfg, flags);
+          stdout.write(`  ${r.start.ok ? "✓" : "✗"} ${r.start.message}\n`);
+        }
+      } else {
+        const result = setPassword(cfg, flags.token || undefined);
+        stdout.write(`✓ ${result.message}\n`);
+        stdout.write(`  Full key: ${result.token}\n`);
       }
       return;
     case "":

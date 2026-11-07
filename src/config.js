@@ -5,7 +5,7 @@ import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 
-export const VERSION = "0.3.7";
+export const VERSION = "0.3.8";
 
 // Shared keep-alive agents for upstream connections. Reusing TCP connections
 // across requests avoids the ~50-100ms connection setup overhead per lane.
@@ -21,6 +21,7 @@ export const DEFAULTS = {
   port: 8082,
   host: "127.0.0.1",
   token: "",
+  authFile: "", // path to a file containing the auth token (like a PEM file)
   // ── Enhancement ──
   enhance: true,
   cleanOutput: true,
@@ -124,11 +125,26 @@ export function loadConfig(file = configPath()) {
   }
   const cfg = merge(DEFAULTS, raw);
 
+  // Load token from auth file if specified
+  if (cfg.authFile) {
+    try {
+      const fileToken = fs.readFileSync(cfg.authFile, "utf8").trim();
+      if (fileToken) cfg.token = fileToken;
+    } catch {}
+  }
+
   // Environment wins over the file, file wins over defaults.
   const env = process.env;
   if (env.A0_PORT) cfg.port = Number(env.A0_PORT);
   if (env.A0_HOST) cfg.host = env.A0_HOST;
   if (env.A0_TOKEN) cfg.token = env.A0_TOKEN;
+  if (env.A0_AUTH_FILE) {
+    cfg.authFile = env.A0_AUTH_FILE;
+    try {
+      const fileToken = fs.readFileSync(env.A0_AUTH_FILE, "utf8").trim();
+      if (fileToken) cfg.token = fileToken;
+    } catch {}
+  }
   if (env.A0_ENHANCE) cfg.enhance = truthy(env.A0_ENHANCE);
   if (env.A0_RACE) cfg.race = clampInt(env.A0_RACE, 1, 4, cfg.race);
   if (env.A0_BEST_OF) cfg.bestOf = clampInt(env.A0_BEST_OF, 1, 4, cfg.bestOf);
