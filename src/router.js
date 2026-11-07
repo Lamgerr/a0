@@ -62,8 +62,8 @@ function score(m, analysis, cfg) {
     if (health.avgLatency > 0 && health.avgLatency < 2000) s += 5;
   }
   
-  // Penalize very low quality models for complex tasks
-  if (preferQuality && (m.quality || 1) < 3) s -= 20;
+  // Slightly prefer curated models over discovered ones (unverified)
+  if (m._discovered) s -= 2;
   
   return s;
 }

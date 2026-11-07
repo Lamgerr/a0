@@ -11,7 +11,7 @@
 import { resolveProviders } from "./registry.js";
 import { saveConfig } from "./config.js";
 
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 const FAILURE_THRESHOLD = 3;
 
 // Conservative defaults for newly discovered models
@@ -77,16 +77,28 @@ async function fetchProviderModels(provider) {
     if (!res.ok) return null;
     const json = await res.json();
     const models = Array.isArray(json.data) ? json.data : Array.isArray(json.models) ? json.models : [];
-    return models.map((m) => ({
-      id: m.id || m.name || m.model,
-      label: m.id || m.name || m.model,
-      // Use provider metadata if available
-      context: m.context_length || m.context || inferCapabilities(m.id || m.name || m.model).context,
-      tools: m.capabilities?.tools ?? inferCapabilities(m.id || m.name || m.model).tools,
-      vision: m.capabilities?.vision ?? inferCapabilities(m.id || m.name || m.model).vision,
-      quality: inferCapabilities(m.id || m.name || m.model).quality,
-      fast: inferCapabilities(m.id || m.name || m.model).fast,
-    })).filter((m) => m.id);
+    return models
+      .map((m) => {
+        const id = m.id || m.name || m.model;
+        if (!id) return null;
+        // Skip models that look like they need special access or are not chat models
+        const lower = String(id).toLowerCase();
+        if (lower.includes("embedding") || lower.includes("whisper") || lower.includes("tts") || 
+            lower.includes("dall-e") || lower.includes("moderation") || lower.includes("audio") ||
+            lower.includes("image-generation") || lower.includes("fine-tune")) return null;
+        // Skip models with very long IDs (likely internal)
+        if (String(id).length > 80) return null;
+        return {
+          id,
+          label: m.name || id,
+          context: m.context_length || m.context || inferCapabilities(id).context,
+          tools: m.capabilities?.tools ?? inferCapabilities(id).tools,
+          vision: m.capabilities?.vision ?? inferCapabilities(id).vision,
+          quality: inferCapabilities(id).quality,
+          fast: inferCapabilities(id).fast,
+        };
+      })
+      .filter(Boolean);
   } catch {
     return null;
   }
@@ -117,27 +129,38 @@ export async function runResearchCycle(cfg) {
 
     const override = cfg.providers[p.id] || {};
     const knownIds = new Set((override.models || p.models || []).map((m) => m.id));
+    const curatedIds = new Set((p.models || []).map((m) => m.id));
     const newIds = new Set(models.map((m) => m.id));
-
-    // Add new models
     const disabled = new Set(Array.isArray(override.disabled) ? override.disabled : []);
-    if (!Array.isArray(override.models)) override.models = (p.models || []).map((m) => {
-      const { providerId, providerLabel, keyless, enabled, ...rest } = m;
-      return rest;
-    });
+
+    // Only add NEW models (not already known)
+    if (!Array.isArray(override.models)) {
+      override.models = (p.models || []).map((m) => {
+        const { providerId, providerLabel, keyless, enabled, ...rest } = m;
+        return rest;
+      });
+    }
 
     let changed = false;
     for (const m of models) {
-      if (!knownIds.has(m.id)) {
-        override.models.push({ id: m.id, label: m.label, context: m.context, tools: m.tools, vision: m.vision, quality: m.quality, fast: m.fast });
-        changed = true;
-        result.added++;
-      }
+      if (knownIds.has(m.id)) continue;
+      // Skip if this model is already in the curated list
+      if (curatedIds.has(m.id)) continue;
+      override.models.push({ id: m.id, label: m.label, context: m.context, tools: m.tools, vision: m.vision, quality: m.quality, fast: m.fast, _discovered: true });
+      changed = true;
+      result.added++;
     }
 
-    // Remove models that no longer exist (but respect disabled list)
+    // Never remove curated models. Only remove discovered models that no longer exist.
     const before = override.models.length;
-    override.models = override.models.filter((m) => newIds.has(m.id) || disabled.has(m.id));
+    override.models = override.models.filter((m) => {
+      // Keep curated models always
+      if (curatedIds.has(m.id)) return true;
+      // Keep disabled models (user explicitly disabled them)
+      if (disabled.has(m.id)) return true;
+      // Remove discovered models that no longer exist
+      return newIds.has(m.id);
+    });
     if (override.models.length < before) {
       result.removed += before - override.models.length;
       changed = true;
