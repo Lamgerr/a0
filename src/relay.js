@@ -39,6 +39,7 @@ export function setCachedResponse(body, response) {
 }
 
 import { agentFor } from "./config.js";
+import { recordSuccess, recordFailure, recordHealth, isBadOutput, retryDelay, sleep } from "./resilience.js";
 
 export class RelayError extends Error {
   constructor(code, message, attempts = [], status = 502) {
@@ -102,6 +103,7 @@ async function openStream(c, body, cfg, signal) {
   const ac = new AbortController();
   const onAbort = () => ac.abort();
   if (signal) signal.addEventListener("abort", onAbort, { once: true });
+  const started = Date.now();
 
   const timer = setTimeout(() => ac.abort(), cfg.requestTimeoutMs);
   let reader;
@@ -115,13 +117,19 @@ async function openStream(c, body, cfg, signal) {
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
+      recordFailure(c.provider.id);
       throw new Error(`HTTP ${r.status} ${detail.slice(0, 240)}`);
     }
     if (!r.body) throw new Error("upstream returned no body");
     reader = r.body.getReader();
     const first = await readFirst(reader, cfg.firstByteTimeoutMs);
-    if (first.done || !first.value || first.value.length === 0) throw new Error("empty first byte");
+    if (first.done || !first.value || first.value.length === 0) {
+      recordFailure(c.provider.id);
+      throw new Error("empty first byte");
+    }
     clearTimeout(timer);
+    recordSuccess(c.provider.id);
+    recordHealth(c.provider.id, true, Date.now() - started);
     return {
       c,
       ac,
@@ -137,6 +145,8 @@ async function openStream(c, body, cfg, signal) {
     clearTimeout(timer);
     if (signal) signal.removeEventListener("abort", onAbort);
     ac.abort();
+    recordFailure(c.provider.id);
+    recordHealth(c.provider.id, false, Date.now() - started);
     throw err;
   }
 }
@@ -147,6 +157,7 @@ async function callOnce(c, body, cfg, signal) {
   const onAbort = () => ac.abort();
   if (signal) signal.addEventListener("abort", onAbort, { once: true });
   try {
+    const started = Date.now();
     const r = await timed(
       cfg.requestTimeoutMs,
       () =>
@@ -160,14 +171,23 @@ async function callOnce(c, body, cfg, signal) {
       () => ac.abort(),
     );
     const raw = await r.text();
-    if (!r.ok) throw new Error(`HTTP ${r.status} ${raw.slice(0, 240)}`);
+    if (!r.ok) {
+      recordFailure(c.provider.id);
+      recordHealth(c.provider.id, false, Date.now() - started);
+      throw new Error(`HTTP ${r.status} ${raw.slice(0, 240)}`);
+    }
     let json;
     try {
       json = JSON.parse(raw);
     } catch {
       throw new Error("upstream returned invalid JSON");
     }
-    if (!Array.isArray(json.choices) || json.choices.length === 0) throw new Error("upstream returned no choices");
+    if (!Array.isArray(json.choices) || json.choices.length === 0) {
+      recordFailure(c.provider.id);
+      throw new Error("upstream returned no choices");
+    }
+    recordSuccess(c.provider.id);
+    recordHealth(c.provider.id, true, Date.now() - started);
     return { c, json };
   } finally {
     if (signal) signal.removeEventListener("abort", onAbort);

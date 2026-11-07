@@ -8,6 +8,7 @@ import { route, RouteError, routeErrorBody } from "./router.js";
 import { catalog, CATEGORIES, resolveProviders } from "./registry.js";
 import { relayStream, relayOnce, RelayError, relayErrorPayload, getCachedResponse, setCachedResponse } from "./relay.js";
 import { VERSION } from "./config.js";
+import { resetAllCircuits } from "./resilience.js";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -59,6 +60,7 @@ function isLoopback(host) {
 }
 
 export function createServer({ cfg, providers, log = () => {} }) {
+  resetAllCircuits();
   // Pre-compute catalog once (providers don't change during server lifetime).
   const cachedCatalog = catalog(providers);
   const cachedHealthz = {

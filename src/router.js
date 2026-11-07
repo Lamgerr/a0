@@ -1,5 +1,6 @@
-// The router: eligibility first, score second, diversity third. A lane is
-// never asked to do something it cannot do — no tool call to a chat-only
+import { isCircuitOpen, checkRateLimit, getHealth, resetAllCircuits } from "./resilience.js";
+
+// The router: eligibility first, score second, diversity third.
 // model, no image to a text-only one, no 200K prompt to a 32K window.
 
 const CATEGORY_IDS = new Set([
@@ -25,6 +26,7 @@ function pool(providers) {
   const out = [];
   for (const p of providers) {
     if (!p.enabled) continue;
+    // if (isCircuitOpen(p.id)) continue;
     for (const m of p.models) {
       if (m.enabled === false) continue;
       out.push({ provider: p, model: m });
@@ -53,10 +55,11 @@ function score(m, analysis, cfg) {
     if (m.keyless) s += 10;
   }
   
-  // Cost optimization: prefer cheaper lanes when quality is sufficient
-  if (cfg?.routing?.costOptimize !== false && analysis.difficulty <= 2) {
-    if (m.keyless) s += 5;
-    if (m.fast) s += 5;
+  // Health-based scoring: prefer lanes with high success rates
+  const health = getHealth(m.providerId || c?.provider?.id);
+  if (health.total > 5) {
+    s += (health.successRate - 0.5) * 20; // -10 to +10
+    if (health.avgLatency > 0 && health.avgLatency < 2000) s += 5;
   }
   
   // Penalize very low quality models for complex tasks
