@@ -77,30 +77,56 @@ async function fetchProviderModels(provider) {
     if (!res.ok) return null;
     const json = await res.json();
     const models = Array.isArray(json.data) ? json.data : Array.isArray(json.models) ? json.models : [];
-    return models
-      .map((m) => {
-        const id = m.id || m.name || m.model;
-        if (!id) return null;
-        // Skip models that look like they need special access or are not chat models
-        const lower = String(id).toLowerCase();
-        if (lower.includes("embedding") || lower.includes("whisper") || lower.includes("tts") || 
-            lower.includes("dall-e") || lower.includes("moderation") || lower.includes("audio") ||
-            lower.includes("image-generation") || lower.includes("fine-tune")) return null;
-        // Skip models with very long IDs (likely internal)
-        if (String(id).length > 80) return null;
-        return {
-          id,
-          label: m.name || id,
-          context: m.context_length || m.context || inferCapabilities(id).context,
-          tools: m.capabilities?.tools ?? inferCapabilities(id).tools,
-          vision: m.capabilities?.vision ?? inferCapabilities(id).vision,
-          quality: inferCapabilities(id).quality,
-          fast: inferCapabilities(id).fast,
-        };
-      })
-      .filter(Boolean);
+    const result = [];
+    for (const m of models) {
+      const id = m.id || m.name || m.model;
+      if (!id) continue;
+      const lower = String(id).toLowerCase();
+      // Skip non-chat models
+      if (lower.includes("embedding") || lower.includes("whisper") || lower.includes("tts") ||
+          lower.includes("dall-e") || lower.includes("moderation") || lower.includes("audio") ||
+          lower.includes("image-generation") || lower.includes("fine-tune")) continue;
+      // Skip models with very long IDs (likely internal)
+      if (String(id).length > 80) continue;
+      // For keyless providers, check if model requires auth
+      if (!provider.key && provider.keyless) {
+        const pricing = m.pricing;
+        const isPaid = pricing && (pricing.input > 0 || pricing.output > 0);
+        if (isPaid && !lower.includes(":free") && !lower.includes("free")) {
+          // Quick test: try a minimal request
+          const works = await testModelAnonymous(provider, id);
+          if (!works) continue;
+        }
+      }
+      result.push({
+        id,
+        label: m.name || id,
+        context: m.context_length || m.context || inferCapabilities(id).context,
+        tools: m.capabilities?.tools ?? inferCapabilities(id).tools,
+        vision: m.capabilities?.vision ?? inferCapabilities(id).vision,
+        quality: inferCapabilities(id).quality,
+        fast: inferCapabilities(id).fast,
+      });
+    }
+    return result;
   } catch {
     return null;
+  }
+}
+
+// Test if a model works without authentication
+async function testModelAnonymous(provider, modelId) {
+  const url = `${provider.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: modelId, messages: [{ role: "user", content: "hi" }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    return res.status !== 401 && res.status !== 403;
+  } catch {
+    return false;
   }
 }
 
@@ -113,9 +139,12 @@ const failureCounts = new Map();
 export async function runResearchCycle(cfg) {
   const providers = resolveProviders(cfg);
   const enabled = providers.filter((p) => p.enabled);
+  // Only research providers that are keyless or have keys
+  // Skip providers that are known to require keys and don't have one
+  const researchable = enabled.filter((p) => p.keyless || p.hasKey);
   const result = { added: 0, removed: 0, updated: 0, errors: [] };
 
-  for (const p of enabled) {
+  for (const p of researchable) {
     const models = await fetchProviderModels(p);
     if (!models) {
       const count = (failureCounts.get(p.id) || 0) + 1;
