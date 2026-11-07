@@ -1,4 +1,4 @@
-// TUI — full-screen + line-based. Zero dependencies, ANSI only.
+// TUI — full-screen, OpenCode-inspired. Zero dependencies, ANSI only.
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
@@ -7,6 +7,7 @@ import { mask, saveConfig as persist, redact, VERSION } from "./config.js";
 import { applySetupMode, guideLines, modeSummary, optional, recommended } from "./setup.js";
 import { checkLatest, installLatest } from "./update.js";
 
+// ── terminal helpers ──────────────────────────────────────────────────────
 const tty = Boolean(stdout.isTTY);
 const ESC = "\x1b";
 const ALT_ON = `${ESC}[?1049h${ESC}[?25l`;
@@ -20,19 +21,26 @@ const c = (code) => (s) => tty ? `${ESC}[${code}m${s}${RESET}` : String(s);
 const bold = c("1"); const dim = c("2");
 const fg = { cyan: c("36"), green: c("32"), yellow: c("33"), red: c("31"), blue: c("34"), magenta: c("35"), white: c("37"), gray: c("90") };
 
-const BOX = { tl:"┌", tr:"┐", bl:"└", br:"┘", h:"─", v:"│" };
+const BOX = { tl:"┌", tr:"┐", bl:"└", br:"┘", h:"─", v:"│", dTl:"╔", dTr:"╗", dBl:"╚", dBr:"╝" };
+
 function termSize() { return { w: stdout.columns || 80, h: stdout.rows || 24 }; }
 function move(r, col) { stdout.write(`${ESC}[${r};${col}H`); }
 function writeAt(r, col, text) { move(r, col); stdout.write(text); }
 function truncate(s, w) { return s.length > w ? s.slice(0, w - 1) + "…" : s; }
 
-let keyHandler = null, inputBuffer = "";
+// ── input handling ────────────────────────────────────────────────────────
+let keyHandler = null;
+let inputBuffer = "";
+
 function setupRawInput() {
   if (!stdin.isTTY) return;
-  stdin.setRawMode(true); stdin.resume(); stdin.setEncoding("utf8");
+  stdin.setRawMode(true);
+  stdin.resume();
+  stdin.setEncoding("utf8");
   stdin.on("data", (chunk) => { inputBuffer += chunk; processInput(); });
   stdout.write(MOUSE_ON);
 }
+
 function processInput() {
   while (inputBuffer.length > 0) {
     let consumed = false;
@@ -58,10 +66,11 @@ function processInput() {
     if (!consumed) break;
   }
 }
-function setKeyHandler(h) { keyHandler = h; }
+
+function setKeyHandler(handler) { keyHandler = handler; }
 function cleanup() { stdout.write(MOUSE_OFF); if (stdin.isTTY) { stdin.setRawMode(false); stdin.pause(); } stdout.write(ALT_OFF); }
 
-// ── shared readline ───────────────────────────────────────────────────────
+// ── shared readline for forms ─────────────────────────────────────────────
 let rl = null, lineQueue = [], lineWaiter = null;
 function ensureReader() {
   if (rl) return;
@@ -106,9 +115,107 @@ export function promptSecret(question) {
   });
 }
 
-// ── basic helpers ─────────────────────────────────────────────────────────
+// ── drawing primitives ────────────────────────────────────────────────────
 export function clear() { if (tty) stdout.write("\x1b[2J\x1b[H"); }
 export function banner() { clear(); stdout.write(`\n  a0  v${VERSION}\n  OpenAI-compatible inference gateway\n`); }
+function drawBox(r, col, w, h, title = "") {
+  let top = BOX.tl;
+  if (title) { const ts = ` ${title} `; const pad = w - 2 - ts.length; const lp = Math.floor(pad / 2), rp = pad - lp; top += "─".repeat(Math.max(0, lp)) + ts + "─".repeat(Math.max(0, rp)) + BOX.tr; }
+  else top += "─".repeat(w - 2) + BOX.tr;
+  writeAt(r, col, top);
+  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, BOX.v); writeAt(r + i, col + w - 1, BOX.v); }
+  writeAt(r + h - 1, col, BOX.bl + "─".repeat(w - 2) + BOX.br);
+}
+function drawDoubleBox(r, col, w, h, title = "") {
+  let top = BOX.dTl;
+  if (title) { const ts = ` ${title} `; const pad = w - 2 - ts.length; const lp = Math.floor(pad / 2), rp = pad - lp; top += "═".repeat(Math.max(0, lp)) + ts + "═".repeat(Math.max(0, rp)) + BOX.dTr; }
+  else top += "═".repeat(w - 2) + BOX.dTr;
+  writeAt(r, col, top);
+  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, BOX.v); writeAt(r + i, col + w - 1, BOX.v); }
+  writeAt(r + h - 1, col, BOX.dBl + "═".repeat(w - 2) + BOX.dBr);
+}
+function drawStatusBar(items) {
+  const { w, h } = termSize();
+  const bar = items.join("  │  ");
+  writeAt(h, 1, `${ESC}[7m${bar.padEnd(w).slice(0, w)}${RESET}`);
+}
+
+// ── dialog/popup system ───────────────────────────────────────────────────
+let dialogActive = false;
+let dialogContent = null;
+let dialogCallback = null;
+
+function showDialog(title, lines, buttons = ["OK"]) {
+  dialogActive = true;
+  dialogContent = { title, lines, buttons, selectedButton: 0 };
+  renderDialog();
+}
+
+function renderDialog() {
+  if (!dialogActive || !dialogContent) return;
+  const { w, h } = termSize();
+  const { title, lines, buttons, selectedButton } = dialogContent;
+  const dialogW = Math.min(w - 4, 70);
+  const dialogH = lines.length + 6;
+  const r = Math.floor((h - dialogH) / 2);
+  const col = Math.floor((w - dialogW) / 2);
+  drawDoubleBox(r, col, dialogW, dialogH, title);
+  for (let i = 0; i < lines.length; i++) {
+    writeAt(r + 2 + i, col + 2, truncate(lines[i], dialogW - 4));
+  }
+  // Buttons
+  const btnRow = r + dialogH - 2;
+  let btnX = col + 2;
+  for (let i = 0; i < buttons.length; i++) {
+    const prefix = i === selectedButton ? "▸ " : "  ";
+    const style = i === selectedButton ? "\x1b[1;32m" : "";
+    writeAt(btnRow, btnX, `${style}${prefix}${buttons[i]}${RESET}`);
+    btnX += buttons[i].length + 4;
+  }
+  writeAt(h, 1, `${ESC}[7m  Tab/←→ navigate buttons · Enter confirm · Esc cancel${" ".repeat(Math.max(0, w - 50))}${RESET}`);
+}
+
+function closeDialog() {
+  dialogActive = false;
+  dialogContent = null;
+  dialogCallback = null;
+}
+
+function handleDialogKey(ev) {
+  if (!dialogActive) return false;
+  const { buttons, selectedButton } = dialogContent;
+  if (ev.type === "key") {
+    if (ev.key === "escape") { closeDialog(); render(); return true; }
+    if (ev.key === "\x1b[C" || ev.key === "tab") {
+      dialogContent.selectedButton = (selectedButton + 1) % buttons.length;
+      renderDialog();
+      return true;
+    }
+    if (ev.key === "\x1b[D") {
+      dialogContent.selectedButton = (selectedButton - 1 + buttons.length) % buttons.length;
+      renderDialog();
+      return true;
+    }
+    if (ev.key === "enter") {
+      const btn = buttons[selectedButton];
+      closeDialog();
+      if (dialogCallback) dialogCallback(btn);
+      render();
+      return true;
+    }
+  } else if (ev.type === "char") {
+    if (ev.char === " ") {
+      const btn = buttons[selectedButton];
+      closeDialog();
+      if (dialogCallback) dialogCallback(btn);
+      render();
+      return true;
+    }
+  }
+  return true; // consume all input when dialog is active
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────
 function tierLabel(p) {
   if (p.tier === "recommended") return "recommended";
   if (p.tier === "keyless") return "keyless";
@@ -135,19 +242,6 @@ function testProvider(p) {
   return fetch(url, { signal: AbortSignal.timeout(8000), headers: p.key ? { authorization: `Bearer ${p.key}` } : {} })
     .then((res) => ({ ok: res.ok, status: res.status, ms: Date.now() - started }))
     .catch((err) => ({ ok: false, status: err.name === "TimeoutError" ? "timeout" : err.message, ms: Date.now() - started }));
-}
-function drawBox(r, col, w, h, title = "") {
-  let top = "┌";
-  if (title) { const ts = ` ${title} `; const pad = w - 2 - ts.length; const lp = Math.floor(pad / 2), rp = pad - lp; top += "─".repeat(Math.max(0, lp)) + ts + "─".repeat(Math.max(0, rp)) + "┐"; }
-  else top += "─".repeat(w - 2) + "┐";
-  writeAt(r, col, top);
-  for (let i = 1; i < h - 1; i++) { writeAt(r + i, col, "│"); writeAt(r + i, col + w - 1, "│"); }
-  writeAt(r + h - 1, col, "└" + "─".repeat(w - 2) + "┘");
-}
-function drawStatusBar(items) {
-  const { w, h } = termSize();
-  const bar = items.join("  │  ");
-  writeAt(h, 1, `${ESC}[7m${bar.padEnd(w).slice(0, w)}${RESET}`);
 }
 
 // ── setup wizard ──────────────────────────────────────────────────────────
@@ -262,10 +356,55 @@ export async function providerMenu(cfg) {
   for (;;) {
     banner();
     const providers = resolveProviders(cfg);
-    stdout.write(`\nLanes\n${providerList(providers)}\n\n  toggle <n> · key <n> · models <n> · guide <n> · test <n> · testall · back\n`);
+    // Only show active (enabled) providers
+    const active = providers.filter((p) => p.enabled);
+    stdout.write(`\nLanes (active only)\n`);
+    for (const [i, p] of active.entries()) {
+      const keyInfo = p.hasKey ? `key ${mask(p.key)}` : p.keyless ? "anonymous" : "no key";
+      const mc = modelCounts(p);
+      const modelInfo = (p.keyless && !p.hasKey) ? `${mc.total} curated` : `${mc.enabled}/${mc.total} models`;
+      stdout.write(`  ${String(i + 1).padStart(2)}. ${p.enabled ? "●" : "○"} ${p.label.padEnd(18)} ${keyInfo.padEnd(20)} ${modelInfo}\n`);
+    }
+    stdout.write(`\n  ${dim("Press Ctrl+P to add a new provider")}\n`);
+    stdout.write(`  ${dim("toggle <n> · key <n> · models <n> · guide <n> · test <n> · testall · back")}\n`);
     const input = (await ask("Command", "back")).trim().toLowerCase();
     const [cmd, arg] = input.split(/\s+/);
     if (cmd === "back" || cmd === "b") return;
+    if (cmd === "\x10" || cmd === "ctrl+p" || cmd === "add") {
+      // Ctrl+P or "add" opens provider search dialog
+      const result = await selectProviderUI(cfg, "Add provider");
+      if (!result) continue;
+      if (result.type === "add_custom") {
+        await addProviderWizard(cfg);
+      } else {
+        const p = result.provider;
+        banner();
+        stdout.write(`\n${p.label}\n\n`);
+        stdout.write(`  Base URL: ${p.baseUrl}\n`);
+        stdout.write(`  Status:   ${p.enabled ? "enabled" : "disabled"}\n`);
+        stdout.write(`  Key:      ${p.hasKey ? mask(p.key) : "none"}\n`);
+        stdout.write(`  Models:   ${modelCounts(p).enabled}/${modelCounts(p).total}\n\n`);
+        for (const line of guideLines(p)) stdout.write(`  ${line}\n`);
+        stdout.write("\n");
+        const action = await ask("Action (key/toggle/models/test/back)", "back");
+        cfg.providers[p.id] = cfg.providers[p.id] || {};
+        if (action === "key" || action === "k") {
+          const key = (await promptSecret(`  ${p.label} API key ${p.hasKey ? `(current ${mask(p.key)})` : ""}: `)).trim();
+          if (key) { saveKey(cfg, p.id, key); persist(cfg); stdout.write(`  ✓ key saved\n`); }
+        } else if (action === "toggle" || action === "t") {
+          cfg.providers[p.id].enabled = !p.enabled;
+          persist(cfg);
+          stdout.write(`  ✓ ${cfg.providers[p.id].enabled ? "enabled" : "disabled"}\n`);
+        } else if (action === "models" || action === "m") {
+          await modelMenu(cfg, p);
+        } else if (action === "test") {
+          const r = await testProvider(p);
+          stdout.write(`  ${r.ok ? "✓ reachable" : `✗ ${r.status}`} ${r.ms}ms\n`);
+        }
+        await ask("Press enter", "");
+      }
+      continue;
+    }
     if (cmd === "testall") {
       stdout.write("\n");
       for (const p of providers.filter((x) => x.enabled)) {
@@ -276,7 +415,7 @@ export async function providerMenu(cfg) {
       continue;
     }
     const idx = Number.parseInt(arg, 10) - 1;
-    const p = providers[idx];
+    const p = active[idx];
     if (!p) continue;
     cfg.providers[p.id] = cfg.providers[p.id] || {};
     if (cmd === "toggle" || cmd === "t") {
@@ -488,7 +627,7 @@ export async function addModelWizard(cfg) {
 export async function settingsMenu(cfg) {
   for (;;) {
     banner();
-    stdout.write(`\nSettings\n\n  1. Lanes, keys, and models\n  2. Behaviour      enhance=${cfg.enhance} clean=${cfg.cleanOutput}\n  3. Performance    race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}\n  4. Server         ${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}\n  5. Routing        keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}\n  6. Updates        auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}\n  7. Providers      search & select from 46+ providers\n  8. Add model      add a model to a provider\n  9. Show config    secrets masked\n  10. Save and exit\n  11. Exit without saving\n`);
+    stdout.write(`\nSettings\n\n  1. Lanes, keys, and models\n  2. Behaviour      enhance=${cfg.enhance} clean=${cfg.cleanOutput}\n  3. Performance    race=${cfg.race} best-of=${cfg.bestOf} attempts=${cfg.maxAttempts}\n  4. Server         ${cfg.host}:${cfg.port}${cfg.token ? " token=on" : ""}\n  5. Routing        keyless-first=${cfg.routing.preferKeyless} sticky=${cfg.routing.sticky}\n  6. Updates        auto-check=${cfg.updates?.autoCheck !== false} auto-install=${Boolean(cfg.updates?.autoInstall)}\n  7. Providers      search & select from 46+ providers  (Ctrl+P in TUI)\n  8. Add model      add a model to a provider\n  9. Show config    secrets masked\n  10. Save and exit\n  11. Exit without saving\n`);
     const choice = await ask("Choice", "10");
     if (choice === "1") await providerMenu(cfg);
     else if (choice === "2") { cfg.enhance = await confirm("Enhance every prompt", cfg.enhance); cfg.cleanOutput = await confirm("Strip filler from non-stream answers", cfg.cleanOutput); }
@@ -632,8 +771,8 @@ export async function runTUI(cfg) {
       writeAt(r, contentX + 2, `  ${active.length} currently enabled`); r++;
       writeAt(r, contentX + 2, `  ${providers.filter(p => p.keyless && !p.hasKey).length} keyless (anonymous)`); r++;
       writeAt(r, contentX + 2, `  ${providers.filter(p => p.tier === "local").length} local providers`); r += 2;
-      writeAt(r, contentX + 2, "  Use 'a0 config' → Providers for search & select"); r++;
-      writeAt(r, contentX + 2, "  Or 'a0 config' → Add provider for custom lanes"); r++;
+      writeAt(r, contentX + 2, "  Press Ctrl+P in 'a0 config' → Providers to search & select"); r++;
+      writeAt(r, contentX + 2, "  Use 'a0 config' → Add provider for custom lanes"); r++;
     } else if (currentView === "settings") {
       let r = 5;
       const lines = [
@@ -655,9 +794,7 @@ export async function runTUI(cfg) {
         "",
         "  Use 'a0 config' for interactive editing",
       ];
-      for (let i = 0; i < lines.length && r + i < h - 5; i++) {
-        writeAt(r + i, contentX + 2, lines[i].slice(0, contentW - 4));
-      }
+      for (let i = 0; i < lines.length && r + i < h - 5; i++) writeAt(r + i, contentX + 2, lines[i].slice(0, contentW - 4));
     } else if (currentView === "doctor") {
       let r = 5;
       writeAt(r, contentX + 2, "  Health Check"); r++;
@@ -729,10 +866,7 @@ const MENU_ITEMS = [
 
 // ── help ──────────────────────────────────────────────────────────────────
 export function help() {
-  stdout.write(`\na0 v${VERSION} — OpenAI-compatible inference gateway\n\nUsage\n  a0                 launch management TUI (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway (foreground)\n  a0 start           start the gateway as a background daemon\n  a0 stop            stop the background daemon\n  a0 restart         restart the background daemon\n  a0 status          show daemon status
-  a0 passwd          set or generate a local auth API key
-  a0 passwd          set or generate a local auth API key
-  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\nFlags\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install\n  --serve            start the gateway server instead of the TUI\n`);
+  stdout.write(`\na0 v${VERSION} — OpenAI-compatible inference gateway\n\nUsage\n  a0                 launch management TUI (runs setup on first launch)\n  a0 tui             full-screen management interface\n  a0 setup           guided provider setup\n  a0 config          interactive settings\n  a0 serve           start the gateway (foreground)\n  a0 start           start the gateway as a background daemon\n  a0 stop            stop the background daemon\n  a0 restart         restart the background daemon\n  a0 status          show daemon status\n  a0 passwd          set or generate a local auth API key\n  a0 doctor          check provider health\n  a0 models          list categories and providers\n  a0 update          update to the latest release\n  a0 version         print version\n\nFlags\n  --port <n>         port (default 8082)\n  --host <addr>      bind address (default 127.0.0.1)\n  --race <n>         lanes raced in parallel (1–4)\n  --no-enhance       disable prompt enhancement\n  --token <secret>   require this bearer token\n  --check            with update: report only, do not install\n  --serve            start the gateway server instead of the TUI\n`);
 }
 
 export default { clear, banner, setupWizard, settingsMenu, doctor, statusLine, modelMenu, addProviderWizard, addModelWizard, promptSecret, help, runTUI, closeInput, selectProviderUI };
