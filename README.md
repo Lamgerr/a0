@@ -26,6 +26,8 @@ a0 is your personal local inference pooling system. It runs on your machine, tak
 
 Your agent does not talk to OpenAI, Groq, or anyone else directly. It talks to a0. a0 talks to everyone else.
 
+Most people end up copying the same providers and keys into every tool they use — Cline, Claude Code, Codex, OpenCode, each with its own setup screen and its own model list. a0 gives those scattered APIs one place. You add your providers to a0 once, and every agent you run points at the same local endpoint with a single key. All your models, all your providers, one address.
+
 It is not an agent, not a chat app, and not a hosted service. It is the piece between your agent and the models.
 
 ## Install
